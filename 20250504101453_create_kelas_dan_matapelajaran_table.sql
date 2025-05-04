@@ -1,0 +1,25 @@
+-- +goose Up
+
+CREATE TABLE kelas (
+    id SERIAL PRIMARY KEY,
+    nama VARCHAR(50) NOT NULL,
+    tingkat ENUM('SD', 'SMP', 'SMA') NOT NULL,
+    wali_kelas_id INTEGER REFERENCES gurus(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE mata_pelajarans (
+    id SERIAL PRIMARY KEY,
+    nama VARCHAR(100) NOT NULL,
+    kode VARCHAR(20) UNIQUE NOT NULL,
+    tingkat ENUM('SD', 'SMP', 'SMA') NOT NULL DEFAULT 'SMP',
+    guru_id INTEGER REFERENCES gurus(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- +goose Down
+
+DROP TABLE IF EXISTS mata_pelajarans;
+DROP TABLE IF EXISTS kelas;
