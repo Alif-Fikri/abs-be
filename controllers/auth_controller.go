@@ -101,7 +101,10 @@ func LoginWaliKelas(c *gin.Context) {
 	}
 
 	var wali models.Guru
-	if err := database.DB.Where("email = ? AND is_wali_kelas = true", req.Email).First(&wali).Error; err != nil {
+	if err := database.DB.
+		Joins("JOIN guru_roles ON guru_roles.guru_id = gurus.id").
+		Where("gurus.email = ? AND guru_roles.role = ?", req.Email, "wali_kelas").
+		First(&wali).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "email tidak ditemukan atau bukan wali kelas")
 		return
 	}
@@ -136,5 +139,19 @@ func LoginWaliKelas(c *gin.Context) {
 			Nama:  wali.Nama,
 		},
 	})
+}
 
+func Logout(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	if token == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "token tidak ditemukan")
+		return
+	}
+
+	if err := database.DB.Where("token = ?", token).Delete(&models.Session{}).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal logout")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "logout berhasil", nil)
 }

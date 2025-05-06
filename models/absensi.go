@@ -18,6 +18,8 @@ type AbsensiSiswa struct {
 	Tanggal       time.Time `gorm:"type:date;not null"`
 	Status        string    `gorm:"type:enum('masuk','izin','sakit','terlambat','alpa');not null"`
 	Keterangan    string    `gorm:"type:text"`
+	Semester      string    `gorm:"type:enum('ganjil','genap');not null"`
+	TahunAjaran   string    `gorm:"type:varchar(9);not null"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

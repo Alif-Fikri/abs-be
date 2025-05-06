@@ -22,23 +22,14 @@ CREATE TABLE gurus (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE guru_roles (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    guru_id INT NOT NULL,
-    role ENUM('wali_kelas','guru_mapel') NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (guru_id) REFERENCES gurus(id) ON DELETE CASCADE
-);
-
 CREATE TABLE kelas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nama VARCHAR(50) NOT NULL,
     tingkat ENUM('SD','SMP','SMA') NOT NULL,
-    wali_kelas_id INT,
+    tahun_ajaran VARCHAR(9) NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (wali_kelas_id) REFERENCES gurus(id)
+    UNIQUE KEY uniq_kelas (nama, tingkat, tahun_ajaran)
 );
 
 CREATE TABLE mata_pelajarans (
@@ -46,10 +37,23 @@ CREATE TABLE mata_pelajarans (
     nama VARCHAR(100) NOT NULL,
     kode VARCHAR(20) UNIQUE NOT NULL,
     tingkat ENUM('SD','SMP','SMA') NOT NULL DEFAULT 'SMP',
-    guru_id INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (guru_id) REFERENCES gurus(id)
+);
+
+CREATE TABLE guru_roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    guru_id INT NOT NULL,
+    role ENUM('wali_kelas','guru_mapel') NOT NULL,
+    kelas_id INT,  -- case jika role = 'wali_kelas'
+    mapel_id INT,  -- case jika role = 'guru_mapel'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (guru_id) REFERENCES gurus(id) ON DELETE CASCADE,
+    FOREIGN KEY (kelas_id) REFERENCES kelas(id),
+    FOREIGN KEY (mapel_id) REFERENCES mata_pelajarans(id),
+    UNIQUE KEY uniq_wali_kelas (role, kelas_id),
+    UNIQUE KEY uniq_guru_mapel (guru_id, role, mapel_id)
 );
 
 CREATE TABLE guru_mapel_kelas (
@@ -57,9 +61,11 @@ CREATE TABLE guru_mapel_kelas (
     guru_id INT NOT NULL,
     mapel_id INT NOT NULL,
     kelas_id INT NOT NULL,
+    tahun_ajaran VARCHAR(9) NOT NULL, 
+    semester ENUM('ganjil','genap') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_gmk (guru_id, mapel_id, kelas_id),
+    UNIQUE KEY uniq_gmk (guru_id, mapel_id, kelas_id, tahun_ajaran, semester),
     FOREIGN KEY (guru_id) REFERENCES gurus(id),
     FOREIGN KEY (mapel_id) REFERENCES mata_pelajarans(id),
     FOREIGN KEY (kelas_id) REFERENCES kelas(id)
@@ -95,6 +101,8 @@ CREATE TABLE absensi_siswas (
     tanggal DATE NOT NULL,
     status ENUM('masuk','izin','sakit','terlambat','alpa') NOT NULL,
     keterangan TEXT,
+    tahun_ajaran VARCHAR(9) NOT NULL,
+    semester ENUM('ganjil','genap') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (siswa_id) REFERENCES siswas(id) ON DELETE CASCADE,
