@@ -76,6 +76,18 @@ func LoginGuru(c *gin.Context) {
 		return
 	}
 
+	var waliKelasCount int64
+	database.DB.Model(&models.GuruRole{}).
+		Where("guru_id = ? AND role = 'wali_kelas'", guru.ID).
+		Count(&waliKelasCount)
+	isWaliKelas := waliKelasCount > 0
+
+	if isWaliKelas {
+		utils.ErrorResponse(c, http.StatusForbidden,
+			"Anda adalah wali kelas, silakan login melalui endpoint wali kelas")
+		return
+	}
+
 	session := models.Session{
 		UserID: guru.ID,
 		Token:  token,
@@ -109,6 +121,15 @@ func LoginWaliKelas(c *gin.Context) {
 		return
 	}
 
+	var kelas models.Kelas
+	if err := database.DB.
+		Where("wali_kelas_id = ?", wali.ID).
+		First(&kelas).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusUnauthorized,
+			"wali kelas tidak memiliki kelas yang ditugaskan")
+		return
+	}
+
 	if !utils.CheckPasswordHash(req.Password, wali.Password) {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "password salah")
 		return
@@ -137,6 +158,11 @@ func LoginWaliKelas(c *gin.Context) {
 			ID:    wali.ID,
 			Email: wali.Email,
 			Nama:  wali.Nama,
+		},
+		"kelas": gin.H{
+			"id":      kelas.ID,
+			"nama":    kelas.Nama,
+			"tingkat": kelas.Tingkat,
 		},
 	})
 }

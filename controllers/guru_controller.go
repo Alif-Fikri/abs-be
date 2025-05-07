@@ -3,6 +3,7 @@ package controllers
 import (
 	"abs-be/database"
 	"abs-be/models"
+	"abs-be/requests"
 	"abs-be/utils"
 	"net/http"
 	"strconv"
@@ -12,11 +13,12 @@ import (
 
 func GetAllGurus(c *gin.Context) {
 	var gurus []models.Guru
-	if err := database.DB.Find(&gurus).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal mengambil data guru")
+	if err := database.DB.Preload("GuruRoles").Find(&gurus).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data guru")
 		return
 	}
-	utils.SuccessResponse(c, http.StatusOK, "berhasil mengambil semua data guru", gurus)
+
+	utils.SuccessResponse(c, http.StatusOK, "Daftar guru berhasil diambil", gurus)
 }
 
 func GetGuruByID(c *gin.Context) {
@@ -36,18 +38,41 @@ func GetGuruByID(c *gin.Context) {
 }
 
 func CreateGuru(c *gin.Context) {
-	var req models.Guru
+	var req requests.CreateGuruRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "data tidak valid: "+err.Error())
+		utils.ErrorResponse(c, http.StatusBadRequest, "Data tidak valid: "+err.Error())
 		return
 	}
 
-	if err := database.DB.Create(&req).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal membuat data guru")
+	var existingGuru models.Guru
+	if err := database.DB.Where("nip = ? OR email = ?", req.NIP, req.Email).First(&existingGuru).Error; err == nil {
+		utils.ErrorResponse(c, http.StatusConflict, "NIP/Email sudah terdaftar")
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, "berhasil membuat data guru", req)
+	hashedPassword, err := utils.HashPassword(req.Password)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengenkripsi password")
+		return
+	}
+
+	newGuru := models.Guru{
+		Nama:         req.Nama,
+		NIP:          req.NIP,
+		NIK:          req.NIK,
+		Email:        req.Email,
+		Telepon:      req.Telepon,
+		Alamat:       req.Alamat,
+		JenisKelamin: req.JenisKelamin,
+		Password:     hashedPassword,
+	}
+
+	if err := database.DB.Create(&newGuru).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat guru")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusCreated, "Guru berhasil dibuat", newGuru)
 }
 
 func UpdateGuru(c *gin.Context) {
@@ -101,4 +126,51 @@ func DeleteGuru(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "berhasil menghapus data guru", nil)
+}
+
+func AssignWaliKelas(c *gin.Context) {
+	var req requests.AssignWaliKelasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Data tidak valid: "+err.Error())
+		return
+	}
+
+	var existingRole models.GuruRole
+	if err := database.DB.Where("guru_id = ? AND role = 'wali_kelas'", req.GuruID).First(&existingRole).Error; err == nil {
+		utils.ErrorResponse(c, http.StatusConflict, "Guru sudah menjadi wali kelas di kelas lain")
+		return
+	}
+
+	tx := database.DB.Begin()
+
+	if err := tx.Model(&models.Kelas{}).
+		Where("id = ?", req.KelasID).
+		Update("wali_kelas_id", nil).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengupdate kelas")
+		return
+	}
+
+	if err := tx.Model(&models.Kelas{}).
+		Where("id = ?", req.KelasID).
+		Update("wali_kelas_id", req.GuruID).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menetapkan wali kelas")
+		return
+	}
+
+	role := models.GuruRole{
+		GuruID:  req.GuruID,
+		Role:    "wali_kelas",
+		KelasID: &req.KelasID,
+	}
+
+	if err := tx.Create(&role).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat role wali kelas")
+		return
+	}
+
+	tx.Commit()
+	utils.SuccessResponse(c, http.StatusOK, "Wali kelas berhasil ditetapkan", nil)
 }

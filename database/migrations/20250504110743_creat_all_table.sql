@@ -27,9 +27,11 @@ CREATE TABLE kelas (
     nama VARCHAR(50) NOT NULL,
     tingkat ENUM('SD','SMP','SMA') NOT NULL,
     tahun_ajaran VARCHAR(9) NOT NULL,
+    wali_kelas_id INT, -- case jika wali_kelas_id = NULL, maka kelas tersebut tidak memiliki wali kelas
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_kelas (nama, tingkat, tahun_ajaran)
+    UNIQUE KEY uniq_kelas (nama, tingkat, tahun_ajaran),
+    FOREIGN KEY (wali_kelas_id) REFERENCES gurus(id)
 );
 
 CREATE TABLE mata_pelajarans (
@@ -38,7 +40,7 @@ CREATE TABLE mata_pelajarans (
     kode VARCHAR(20) UNIQUE NOT NULL,
     tingkat ENUM('SD','SMP','SMA') NOT NULL DEFAULT 'SMP',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE guru_roles (
@@ -53,7 +55,9 @@ CREATE TABLE guru_roles (
     FOREIGN KEY (kelas_id) REFERENCES kelas(id),
     FOREIGN KEY (mapel_id) REFERENCES mata_pelajarans(id),
     UNIQUE KEY uniq_wali_kelas (role, kelas_id),
-    UNIQUE KEY uniq_guru_mapel (guru_id, role, mapel_id)
+    UNIQUE KEY uniq_guru_mapel (guru_id, role, mapel_id),
+    INDEX idx_guru_roles_guru (guru_id),
+    INDEX idx_guru_roles_mapel (mapel_id)
 );
 
 CREATE TABLE guru_mapel_kelas (
@@ -68,7 +72,9 @@ CREATE TABLE guru_mapel_kelas (
     UNIQUE KEY uniq_gmk (guru_id, mapel_id, kelas_id, tahun_ajaran, semester),
     FOREIGN KEY (guru_id) REFERENCES gurus(id),
     FOREIGN KEY (mapel_id) REFERENCES mata_pelajarans(id),
-    FOREIGN KEY (kelas_id) REFERENCES kelas(id)
+    FOREIGN KEY (kelas_id) REFERENCES kelas(id),
+    INDEX idx_gmk_tahun (tahun_ajaran),
+    INDEX idx_gmk_semester (semester)
 );
 
 CREATE TABLE siswas (

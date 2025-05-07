@@ -24,6 +24,7 @@ func GetAllWaliKelas(c *gin.Context) {
 				"kelas_id":        k.ID,
 				"nama_kelas":      k.Nama,
 				"tingkat":         k.Tingkat,
+				"tahun_ajaran":    k.TahunAjaran,
 				"wali_kelas_id":   k.WaliKelas.ID,
 				"wali_kelas_nama": k.WaliKelas.Nama,
 			})
@@ -34,20 +35,15 @@ func GetAllWaliKelas(c *gin.Context) {
 }
 
 func GetKelasWaliKelas(c *gin.Context) {
-	guruIDParam := c.Param("guruID")
-	guruID, err := strconv.Atoi(guruIDParam)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "ID guru tidak valid")
-		return
-	}
+	guruID := c.MustGet("userID").(uint)
 
 	var kelas models.Kelas
 	if err := database.DB.Preload("WaliKelas").Where("wali_kelas_id = ?", guruID).First(&kelas).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusNotFound, "Guru ini bukan wali kelas dari kelas manapun")
+		utils.ErrorResponse(c, http.StatusNotFound, "guru ini bukan wali kelas dari kelas manapun")
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Guru adalah wali kelas", kelas)
+	utils.SuccessResponse(c, http.StatusOK, "guru ini adalah wali kelas", kelas)
 }
 
 func GetSiswaByWaliKelas(c *gin.Context) {

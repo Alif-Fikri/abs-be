@@ -1,6 +1,6 @@
 package requests
 
-type GuruRequest struct {
+type CreateGuruRequest struct {
 	Nama         string `json:"nama" binding:"required"`
 	NIP          string `json:"nip" binding:"required"`
 	NIK          string `json:"nik" binding:"required"`
@@ -14,5 +14,10 @@ type GuruRequest struct {
 type GuruMapelKelasRequest struct {
 	GuruID  uint `json:"guru_id" binding:"required"`
 	MapelID uint `json:"mapel_id" binding:"required"`
+	KelasID uint `json:"kelas_id" binding:"required"`
+}
+
+type AssignWaliKelasRequest struct {
+	GuruID  uint `json:"guru_id" binding:"required"`
 	KelasID uint `json:"kelas_id" binding:"required"`
 }

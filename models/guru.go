@@ -14,7 +14,8 @@ type Guru struct {
 	Alamat       string     `gorm:"type:text"`
 	JenisKelamin string     `gorm:"type:enum('L','P');not null"`
 	Password     string     `gorm:"type:varchar(255);not null"`
-	GuruRoles    []GuruRole `gorm:"foreignKey:GuruID"` // ← Tambahkan ini
+	GuruRoles    []GuruRole `gorm:"foreignKey:GuruID"`
+	KelasWali    []Kelas    `gorm:"foreignKey:WaliKelasID"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -22,9 +23,14 @@ type Guru struct {
 type GuruRole struct {
 	ID        uint   `gorm:"primaryKey"`
 	GuruID    uint   `gorm:"not null"`
-	Role      string `gorm:"type:enum('wali_kelas','guru_mapel');not null"` // ← Hanya 2 role ini
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Role      string `gorm:"type:ENUM('wali_kelas','guru_mapel');not null"`
+	KelasID   *uint
+	MapelID   *uint
+	CreatedAt time.Time     `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time     `gorm:"default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"`
+	Guru      Guru          `gorm:"foreignKey:GuruID"`
+	Kelas     Kelas         `gorm:"foreignKey:KelasID"`
+	Mapel     MataPelajaran `gorm:"foreignKey:MapelID"`
 }
 
 type GuruMapelKelas struct {
