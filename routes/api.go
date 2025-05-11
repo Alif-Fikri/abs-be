@@ -23,7 +23,7 @@ func Api(r *gin.Engine) {
 		c.JSON(200, gin.H{"message": "dashboard Admin"})
 	})
 
-	api.GET("/dasboard-walikelas", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("wali_kelas"), func(c *gin.Context) {
+	api.GET("/dashboard-walikelas", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("wali_kelas"), func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "dashboard Wali Kelas"})
 
 	})
@@ -51,12 +51,20 @@ func Api(r *gin.Engine) {
 	kelas.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin"))
 	{
 		kelas.POST("/", tc.CreateKelas)
+		kelas.GET("/", tc.GetAllKelas)
+		kelas.GET("/:id", tc.GetKelasByID)
+		kelas.PUT("/:id", tc.UpdateKelas)
+		kelas.DELETE("/:id", tc.DeleteKelas)
 	}
 
 	mapel := api.Group("/mapel")
 	mapel.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin"))
 	{
 		mapel.POST("/", tc.CreateMataPelajaran)
+		mapel.GET("/", tc.GetAllMataPelajaran)
+		mapel.GET("/:id", tc.GetMataPelajaranByID)
+		mapel.PUT("/:id", tc.UpdateMataPelajaran)
+		mapel.DELETE("/:id", tc.DeleteMataPelajaran)
 	}
 
 	siswa := api.Group("/siswa")
@@ -64,6 +72,12 @@ func Api(r *gin.Engine) {
 	{
 		siswa.POST("/", tc.CreateSiswa)
 		siswa.GET("/", tc.GetSiswaByKelas)
+		siswa.GET("/", tc.GetAllSiswa)
+		siswa.GET("/:id", tc.GetSiswaByID)
+		siswa.GET("/kelas/:kelasId", tc.GetSiswaByKelas)
+		siswa.PUT("/:id", tc.UpdateSiswa)
+		siswa.DELETE("/:id", tc.DeleteSiswa)
+
 	}
 
 }

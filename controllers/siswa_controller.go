@@ -6,6 +6,7 @@ import (
 	"abs-be/requests"
 	"abs-be/utils"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -64,4 +65,94 @@ func GetSiswaByKelas(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Daftar siswa berhasil diambil", siswa)
+}
+
+func GetAllSiswa(c *gin.Context) {
+	var siswa []models.Siswa
+	if err := database.DB.Find(&siswa).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data siswa")
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "Data siswa berhasil diambil", siswa)
+}
+
+func GetSiswaByID(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ID tidak valid")
+		return
+	}
+
+	var siswa models.Siswa
+	if err := database.DB.First(&siswa, id).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Siswa tidak ditemukan")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Data siswa berhasil ditemukan", siswa)
+}
+
+func UpdateSiswa(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ID tidak valid")
+		return
+	}
+
+	var siswa models.Siswa
+	if err := database.DB.First(&siswa, id).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Siswa tidak ditemukan")
+		return
+	}
+
+	var req requests.CreateSiswaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Data tidak valid: "+err.Error())
+		return
+	}
+
+	tglLahir, err := time.Parse("2006-01-02", req.TanggalLahir)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah. Gunakan format YYYY-MM-DD")
+		return
+	}
+
+	siswa.Nama = req.Nama
+	siswa.NISN = req.NISN
+	siswa.TempatLahir = req.TempatLahir
+	siswa.TanggalLahir = tglLahir
+	siswa.JenisKelamin = req.JenisKelamin
+	siswa.NamaAyah = req.NamaAyah
+	siswa.NamaIbu = req.NamaIbu
+	siswa.Alamat = req.Alamat
+	siswa.Agama = req.Agama
+	siswa.Email = req.Email
+	siswa.Telepon = req.Telepon
+	siswa.AsalSekolah = req.AsalSekolah
+	siswa.KelasID = req.KelasID
+
+	if err := database.DB.Save(&siswa).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui data siswa")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Data siswa berhasil diperbarui", siswa)
+}
+
+func DeleteSiswa(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ID tidak valid")
+		return
+	}
+
+	if err := database.DB.Delete(&models.Siswa{}, id).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus data siswa")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Data siswa berhasil dihapus", nil)
 }
