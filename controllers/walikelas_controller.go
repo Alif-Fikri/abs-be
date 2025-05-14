@@ -68,3 +68,60 @@ func GetSiswaByWaliKelas(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, "Daftar siswa berhasil diambil", siswa)
 }
+
+func UpdateWaliKelas(c *gin.Context) {
+	kelasIDParam := c.Param("kelasID")
+	kelasID, err := strconv.Atoi(kelasIDParam)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ID kelas tidak valid")
+		return
+	}
+
+	var req struct {
+		GuruID uint `json:"guru_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Data tidak valid: "+err.Error())
+		return
+	}
+
+	var kelas models.Kelas
+	if err := database.DB.First(&kelas, kelasID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Kelas tidak ditemukan")
+		return
+	}
+
+	kelas.WaliKelasID = &req.GuruID
+
+	if err := database.DB.Save(&kelas).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui wali kelas")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Wali kelas berhasil diperbarui", kelas)
+}
+
+func RemoveWaliKelas(c *gin.Context) {
+	kelasIDParam := c.Param("kelasID")
+	kelasID, err := strconv.Atoi(kelasIDParam)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ID kelas tidak valid")
+		return
+	}
+
+	var kelas models.Kelas
+	if err := database.DB.First(&kelas, kelasID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Kelas tidak ditemukan")
+		return
+	}
+
+	kelas.WaliKelasID = nil
+
+	if err := database.DB.Save(&kelas).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus wali kelas dari kelas")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Wali kelas berhasil dihapus dari kelas", kelas)
+}
