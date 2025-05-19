@@ -9,7 +9,7 @@ import (
 
 func Api(r *gin.Engine) {
 	api := r.Group("/api")
-
+	api.POST("/login", tc.LoginAll)
 	api.POST("/guru/login", tc.LoginGuru)
 	api.POST("/admin/login", tc.LoginAdmin)
 	api.POST("/wali-kelas/login", tc.LoginWaliKelas)
@@ -71,13 +71,22 @@ func Api(r *gin.Engine) {
 	siswa.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin"))
 	{
 		siswa.POST("/", tc.CreateSiswa)
-		siswa.GET("/", tc.GetSiswaByKelas)
 		siswa.GET("/", tc.GetAllSiswa)
+		siswa.GET("/kelas/:id", tc.GetSiswaByKelas)
 		siswa.GET("/:id", tc.GetSiswaByID)
-		siswa.GET("/kelas/:kelasId", tc.GetSiswaByKelas)
 		siswa.PUT("/:id", tc.UpdateSiswa)
 		siswa.DELETE("/:id", tc.DeleteSiswa)
 
+	}
+
+	absensi := api.Group("/absensi")
+	absensi.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("guru", "wali_kelas"))
+	{
+		absensi.POST("/", tc.CreateAbsensiSiswa)
+		absensi.GET("/list/mapel", tc.ListStudentsForMapel)
+		absensi.GET("/list/kelas", tc.ListStudentsForKelas)
+		absensi.GET("/rekap/mapel", tc.RecapAbsensiMapel)
+		absensi.GET("/rekap/kelas", tc.RecapAbsensiKelas)
 	}
 
 }
