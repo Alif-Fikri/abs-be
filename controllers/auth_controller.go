@@ -196,6 +196,8 @@ func LoginAll(c *gin.Context) {
 		loginGuruAll(c, req)
 	case "wali_kelas":
 		loginWaliKelasAll(c, req)
+	case "siswa":
+		loginSiswaAll(c, req)
 	default:
 		utils.ErrorResponse(c, http.StatusBadRequest, "role tidak dikenali")
 	}
@@ -302,5 +304,32 @@ func loginWaliKelasAll(c *gin.Context, req requests.AllLoginRequest) {
 			"nama":    kelas.Nama,
 			"tingkat": kelas.Tingkat,
 		},
+	})
+}
+
+func loginSiswaAll(c *gin.Context, req requests.AllLoginRequest) {
+	var siswa models.Siswa
+	if err := database.DB.Where("email = ?", req.Email).First(&siswa).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "email tidak ditemukan")
+		return
+	}
+	if !utils.CheckPasswordHash(req.Password, siswa.Password) {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "password salah")
+		return
+	}
+	token, err := utils.GenerateToken(siswa.ID, "siswa")
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal membuat token")
+		return
+	}
+	session := models.Session{UserID: siswa.ID, Token: token, Role: "siswa"}
+	if err := database.DB.Create(&session).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal menyimpan sesi login")
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "login berhasil", gin.H{
+		"token": token,
+		"user":  requests.LoginResponse{ID: siswa.ID, Email: siswa.Email, Nama: siswa.Nama},
+		"role":  "siswa",
 	})
 }

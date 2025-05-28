@@ -45,3 +45,20 @@ type LoginResponse struct {
 	Role  string `json:"role"`
 	Token string `json:"token"`
 }
+
+type SiswaResponse struct {
+	ID           uint   `json:"id"`
+	Nama         string `json:"nama"`
+	NISN         string `json:"nisn"`
+	TempatLahir  string `json:"tempat_lahir"`
+	TanggalLahir string `json:"tanggal_lahir"` // format: YYYY-MM-DD
+	JenisKelamin string `json:"jenis_kelamin"`
+	NamaAyah     string `json:"nama_ayah"`
+	NamaIbu      string `json:"nama_ibu"`
+	Alamat       string `json:"alamat"`
+	Agama        string `json:"agama"`
+	Email        string `json:"email"`
+	Telepon      string `json:"telepon"`
+	AsalSekolah  string `json:"asal_sekolah"`
+	KelasID      uint   `json:"kelas_id"`
+}

@@ -19,7 +19,8 @@ type Siswa struct {
 	Telepon      string    `gorm:"type:varchar(20)"`
 	AsalSekolah  string    `gorm:"type:varchar(100);not null"`
 	KelasID      uint
-	Kelas        Kelas `gorm:"foreignKey:KelasID"`
+	Kelas        Kelas  `gorm:"foreignKey:KelasID"`
+	Password     string `json:"-" gorm:"type:varchar(255)"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

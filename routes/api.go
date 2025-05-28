@@ -28,6 +28,10 @@ func Api(r *gin.Engine) {
 
 	})
 
+	api.GET("/dashboard-siswa", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("siswa"), func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "dashboard Siswa"})
+	})
+
 	guru := api.Group("/guru")
 	guru.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin"))
 	{
@@ -77,6 +81,13 @@ func Api(r *gin.Engine) {
 		siswa.PUT("/:id", tc.UpdateSiswa)
 		siswa.DELETE("/:id", tc.DeleteSiswa)
 
+	}
+
+	siswaaja := api.Group("/siswa")
+	siswaaja.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("siswa"))
+	{
+		siswaaja.GET("/profil", tc.GetProfilSiswa)
+		siswaaja.GET("/absensi", tc.GetAbsensiSiswa)
 	}
 
 	absensi := api.Group("/absensi")

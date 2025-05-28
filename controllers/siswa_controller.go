@@ -156,3 +156,60 @@ func DeleteSiswa(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, "Data siswa berhasil dihapus", nil)
 }
+
+func GetProfilSiswa(c *gin.Context) {
+	siswaID := c.MustGet("user_id").(uint)
+
+	var siswa models.Siswa
+	if err := database.DB.First(&siswa, siswaID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Siswa tidak ditemukan")
+		return
+	}
+
+	response := requests.SiswaResponse{
+		ID:           siswa.ID,
+		Nama:         siswa.Nama,
+		NISN:         siswa.NISN,
+		TempatLahir:  siswa.TempatLahir,
+		TanggalLahir: siswa.TanggalLahir.Format("2006-01-02"),
+		JenisKelamin: siswa.JenisKelamin,
+		NamaAyah:     siswa.NamaAyah,
+		NamaIbu:      siswa.NamaIbu,
+		Alamat:       siswa.Alamat,
+		Agama:        siswa.Agama,
+		Email:        siswa.Email,
+		Telepon:      siswa.Telepon,
+		AsalSekolah:  siswa.AsalSekolah,
+		KelasID:      siswa.KelasID,
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Profil siswa", response)
+}
+
+func GetAbsensiSiswa(c *gin.Context) {
+	siswaID := c.MustGet("user_id").(uint)
+
+	tanggal := c.Query("tanggal")
+	tipe := c.Query("tipe")
+
+	query := database.DB.Where("siswa_id = ?", siswaID)
+
+	if tanggal != "" {
+		t, err := time.Parse("2006-01-02", tanggal)
+		if err == nil {
+			query = query.Where("tanggal = ?", t)
+		}
+	}
+
+	if tipe != "" && (tipe == "kelas" || tipe == "mapel") {
+		query = query.Where("tipe_absensi = ?", tipe)
+	}
+
+	var absensi []models.AbsensiSiswa
+	if err := query.Find(&absensi).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data absensi")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Data absensi", absensi)
+}
