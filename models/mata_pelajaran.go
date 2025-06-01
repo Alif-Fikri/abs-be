@@ -11,6 +11,11 @@ type MataPelajaran struct {
 	Tingkat      string `gorm:"type:enum('SD','SMP','SMA');default:'SMP'not null"`
 	GuruPengampu *Guru  `gorm:"foreignKey:GuruID"`
 	GuruID       *uint
+	JamMulai     time.Time `gorm:"type:time" json:"jam_mulai"`
+	JamSelesai   time.Time `gorm:"type:time" json:"jam_selesai"`
+	Hari         string    `gorm:"type:enum('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu');default:'Senin'" json:"hari"`
+	Semester     string    `gorm:"type:enum('ganjil','genap')" json:"semester"`
+	IsActive     bool      `gorm:"type:boolean;default:true" json:"is_active"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

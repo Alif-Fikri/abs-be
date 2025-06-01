@@ -39,6 +39,11 @@ CREATE TABLE mata_pelajarans (
     nama VARCHAR(100) NOT NULL,
     kode VARCHAR(20) UNIQUE NOT NULL,
     tingkat ENUM('SD','SMP','SMA') NOT NULL DEFAULT 'SMP',
+    semester ENUM('ganjil','genap'),
+    hari ENUM('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu') DEFAULT 'Senin',
+    jam_mulai TIME,
+    jam_selesai TIME,
+    is_active BOOLEAN DEFAULT true,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
