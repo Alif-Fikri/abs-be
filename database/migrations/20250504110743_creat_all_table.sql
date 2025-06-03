@@ -132,6 +132,19 @@ CREATE TABLE sessions (
     deleted_at DATETIME
 );
 
+CREATE TABLE todos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    role ENUM('admin', 'guru', 'wali_kelas') NOT NULL,
+    tanggal DATE NOT NULL,
+    deskripsi TEXT NOT NULL,
+    is_done BOOLEAN DEFAULT false,
+    jam_dibuat TIME DEFAULT CURRENT_TIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES sessions(user_id) ON DELETE CASCADE
+);
+
 -- +goose Down
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS absensi_siswas;
@@ -142,3 +155,4 @@ DROP TABLE IF EXISTS kelas;
 DROP TABLE IF EXISTS guru_roles;
 DROP TABLE IF EXISTS gurus;
 DROP TABLE IF EXISTS admins;
+DROP TABLE IF EXISTS todos;
