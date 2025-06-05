@@ -5,11 +5,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"abs-be/database"
 	"abs-be/models"
 	"abs-be/utils"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func AuthMiddleware() gin.HandlerFunc {
@@ -57,11 +58,12 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			c.Set("user", claims)
-			c.Set("tokenString", tokenString) 
-		}
-
+		// if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		// 	c.Set("user", claims)
+		// 	c.Set("tokenString", tokenString)
+		// }
+		c.Set("user_id", session.UserID)
+		c.Set("role", session.Role)
 		c.Next()
 	}
 }

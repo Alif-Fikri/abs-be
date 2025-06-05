@@ -167,20 +167,20 @@ func LoginWaliKelas(c *gin.Context) {
 	})
 }
 
-func Logout(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	if token == "" {
-		utils.ErrorResponse(c, http.StatusBadRequest, "token tidak ditemukan")
-		return
-	}
+// func Logout(c *gin.Context) {
+// 	token := c.GetHeader("Authorization")
+// 	if token == "" {
+// 		utils.ErrorResponse(c, http.StatusBadRequest, "token tidak ditemukan")
+// 		return
+// 	}
 
-	if err := database.DB.Where("token = ?", token).Delete(&models.Session{}).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal logout")
-		return
-	}
+// 	if err := database.DB.Where("token = ?", token).Delete(&models.Session{}).Error; err != nil {
+// 		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal logout")
+// 		return
+// 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "logout berhasil", nil)
-}
+// 	utils.SuccessResponse(c, http.StatusOK, "logout berhasil", nil)
+// }
 
 func LoginAll(c *gin.Context) {
 	var req requests.AllLoginRequest
@@ -331,5 +331,54 @@ func loginSiswaAll(c *gin.Context, req requests.AllLoginRequest) {
 		"token": token,
 		"user":  requests.LoginResponse{ID: siswa.ID, Email: siswa.Email, Nama: siswa.Nama},
 		"role":  "siswa",
+	})
+}
+
+func Logout(c *gin.Context) {
+	// Dapatkan token dari header Authorization
+	tokenString := c.GetHeader("Authorization")
+	if tokenString == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "token tidak ditemukan")
+		return
+	}
+
+	// Dapatkan user_id dan role dari context (setelah melewati middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user_id tidak ditemukan")
+		return
+	}
+
+	role, exists := c.Get("role")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "role tidak ditemukan")
+		return
+	}
+
+	if err := database.DB.Where("token = ?", tokenString).Delete(&models.Session{}).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal menghapus sesi lama")
+		return
+	}
+
+	newToken, err := utils.GenerateToken(userID.(uint), role.(string))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal membuat token baru")
+		return
+	}
+
+	session := models.Session{
+		UserID: userID.(uint),
+		Token:  newToken,
+		Role:   role.(string),
+	}
+
+	if err := database.DB.Create(&session).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal menyimpan sesi baru")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "logout berhasil dan token baru dibuat", gin.H{
+		"message":   "token baru udh dibuat",
+		"new_token": newToken,
 	})
 }
