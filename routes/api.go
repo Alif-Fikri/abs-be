@@ -104,7 +104,7 @@ func Api(r *gin.Engine) {
 	todo.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin", "guru", "wali_kelas"))
 	{
 		todo.POST("/", tc.CreateTodo)
-		todo.GET("/", tc.GetTodosByTanggal)// query?tanggal=YYYY-MM-DD
+		todo.GET("/", tc.GetTodosByTanggal) // query?tanggal=YYYY-MM-DD
 		todo.PUT("/:id/status", tc.UpdateTodoStatus)
 		todo.DELETE("/:id", tc.DeleteTodo)
 	}

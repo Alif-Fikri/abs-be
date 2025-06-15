@@ -127,10 +127,13 @@ CREATE TABLE sessions (
     user_id INT NOT NULL,
     token VARCHAR(512) UNIQUE NOT NULL,
     role ENUM('guru','admin','wali_kelas') NOT NULL,
+    fcm_token VARCHAR(255) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at DATETIME
 );
+
+ALTER TABLE sessions ADD INDEX idx_user_id (user_id);
 
 CREATE TABLE todos (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -139,10 +142,10 @@ CREATE TABLE todos (
     tanggal DATE NOT NULL,
     deskripsi TEXT NOT NULL,
     is_done BOOLEAN DEFAULT false,
-    jam_dibuat TIME DEFAULT CURRENT_TIME,
+    jam_dibuat TIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES sessions(user_id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
 -- +goose Down

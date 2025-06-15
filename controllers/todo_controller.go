@@ -19,21 +19,25 @@ func CreateTodo(c *gin.Context) {
 		return
 	}
 
-	userID := c.MustGet("userID").(uint)
+	userID := c.MustGet("user_id").(uint)
 	role := c.MustGet("role").(string)
 
-	jamSekarang := time.Now().Format("15:04:05")
+	tanggal, err := time.Parse("2006-01-02", req.Tanggal)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah. Gunakan YYYY-MM-DD")
+		return
+	}
 
 	todo := models.Todo{
 		UserID:    userID,
 		Role:      role,
-		Tanggal:   req.Tanggal,
+		Tanggal:   tanggal,
 		Deskripsi: req.Deskripsi,
-		JamDibuat: jamSekarang,
+		JamDibuat: time.Now().Format("15:04:05"),
 	}
 
 	if err := database.DB.Create(&todo).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat catatan baru")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat catatan baru: "+err.Error())
 		return
 	}
 
@@ -41,17 +45,26 @@ func CreateTodo(c *gin.Context) {
 }
 
 func GetTodosByTanggal(c *gin.Context) {
-	tanggal := c.Query("tanggal")
-	if tanggal == "" {
-		tanggal = time.Now().Format("2006-01-02") 
+	tanggalStr := c.Query("tanggal")
+	var tanggal time.Time
+	var err error
+
+	if tanggalStr == "" {
+		tanggal = time.Now()
+	} else {
+		tanggal, err = time.Parse("2006-01-02", tanggalStr)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah. Gunakan YYYY-MM-DD")
+			return
+		}
 	}
 
-	userID := c.MustGet("userID").(uint)
+	userID := c.MustGet("user_id").(uint)
 	role := c.MustGet("role").(string)
 
 	var todos []models.Todo
-	if err := database.DB.Where("user_id = ? AND role = ? AND tanggal = ?", userID, role, tanggal).Order("jam_dibuat ASC").Find(&todos).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil catatan")
+	if err := database.DB.Where("user_id = ? AND role = ? AND tanggal = ?", userID, role, tanggal.Format("2006-01-02")).Order("jam_dibuat ASC").Find(&todos).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil catatan: "+err.Error())
 		return
 	}
 
@@ -72,8 +85,10 @@ func UpdateTodoStatus(c *gin.Context) {
 		return
 	}
 
+	userID := c.MustGet("user_id").(uint)
+
 	var todo models.Todo
-	if err := database.DB.First(&todo, todoID).Error; err != nil {
+	if err := database.DB.Where("id = ? AND user_id = ?", todoID, userID).First(&todo).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusNotFound, "Catatan tidak ditemukan")
 		return
 	}
@@ -81,7 +96,7 @@ func UpdateTodoStatus(c *gin.Context) {
 	todo.IsDone = req.IsDone
 
 	if err := database.DB.Save(&todo).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui status catatan")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui status catatan: "+err.Error())
 		return
 	}
 
@@ -96,8 +111,10 @@ func DeleteTodo(c *gin.Context) {
 		return
 	}
 
-	if err := database.DB.Delete(&models.Todo{}, todoID).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus catatan")
+	userID := c.MustGet("user_id").(uint)
+
+	if err := database.DB.Where("id = ? AND user_id = ?", todoID, userID).Delete(&models.Todo{}).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus catatan: "+err.Error())
 		return
 	}
 
