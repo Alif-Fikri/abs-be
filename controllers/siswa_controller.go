@@ -31,6 +31,14 @@ func CreateSiswa(c *gin.Context) {
 		return
 	}
 
+	plainPassword := tglLahir.Format("02012006")
+
+	hashedPassword, err := utils.HashPassword(plainPassword)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengenkripsi password")
+		return
+	}
+
 	newSiswa := models.Siswa{
 		Nama:         req.Nama,
 		NISN:         req.NISN,
@@ -44,7 +52,7 @@ func CreateSiswa(c *gin.Context) {
 		Email:        req.Email,
 		Telepon:      req.Telepon,
 		AsalSekolah:  req.AsalSekolah,
-		KelasID:      req.KelasID,
+		Password:     hashedPassword,
 	}
 
 	if err := database.DB.Create(&newSiswa).Error; err != nil {
@@ -52,7 +60,9 @@ func CreateSiswa(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, "Siswa berhasil dibuat", newSiswa)
+	utils.SuccessResponse(c, http.StatusCreated, "Siswa berhasil dibuat", gin.H{
+		"siswa": newSiswa,
+	})
 }
 
 func GetSiswaByKelas(c *gin.Context) {
@@ -131,7 +141,6 @@ func UpdateSiswa(c *gin.Context) {
 	siswa.Email = req.Email
 	siswa.Telepon = req.Telepon
 	siswa.AsalSekolah = req.AsalSekolah
-	siswa.KelasID = req.KelasID
 
 	if err := database.DB.Save(&siswa).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui data siswa")
@@ -180,7 +189,6 @@ func GetProfilSiswa(c *gin.Context) {
 		Email:        siswa.Email,
 		Telepon:      siswa.Telepon,
 		AsalSekolah:  siswa.AsalSekolah,
-		KelasID:      siswa.KelasID,
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Profil siswa", response)

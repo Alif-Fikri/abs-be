@@ -5,19 +5,19 @@ import (
 )
 
 type Guru struct {
-	ID           uint       `gorm:"primaryKey"`
-	Nama         string     `gorm:"type:varchar(100);not null"`
-	NIP          string     `gorm:"type:varchar(30);unique;not null"`
-	NIK          string     `gorm:"type:varchar(30);unique;not null"`
-	Email        string     `gorm:"type:varchar(100);unique;not null"`
-	Telepon      string     `gorm:"type:varchar(20)"`
-	Alamat       string     `gorm:"type:text"`
-	JenisKelamin string     `gorm:"type:enum('L','P');not null"`
-	Password     string     `gorm:"type:varchar(255);not null"`
-	GuruRoles    []GuruRole `gorm:"foreignKey:GuruID"`
-	KelasWali    []Kelas    `gorm:"foreignKey:WaliKelasID"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	Nama         string     `gorm:"type:varchar(100);not null" json:"nama"`
+	NIP          string     `gorm:"column:nip;type:varchar(30);unique;not null" json:"nip"`
+	NIK          string     `gorm:"column:nik;type:varchar(30);unique;not null" json:"nik"`
+	Email        string     `gorm:"type:varchar(100);unique;not null" json:"email"`
+	Telepon      string     `gorm:"type:varchar(20)" json:"telepon,omitempty"`
+	Alamat       string     `gorm:"type:text" json:"alamat,omitempty"`
+	JenisKelamin string     `gorm:"type:enum('L','P');not null" json:"jenis_kelamin"`
+	Password     string     `gorm:"type:varchar(255);not null" json:"-"`
+	GuruRoles    []GuruRole `gorm:"foreignKey:GuruID" json:"guru_roles,omitempty"`
+	KelasWali    []Kelas    `gorm:"foreignKey:WaliKelasID" json:"kelas_wali,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 type GuruRole struct {

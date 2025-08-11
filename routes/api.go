@@ -9,9 +9,10 @@ import (
 
 func Api(r *gin.Engine) {
 	api := r.Group("/api")
-	api.POST("/login", tc.LoginAll)
+	api.POST("/login", tc.LoginAutoRole)
 	api.POST("/guru/login", tc.LoginGuru)
 	api.POST("/admin/login", tc.LoginAdmin)
+	api.POST("/admin/register", tc.RegisterAdmin)
 	api.POST("/wali-kelas/login", tc.LoginWaliKelas)
 	api.POST("/logout", middlewares.AuthMiddleware(), tc.Logout)
 
@@ -40,7 +41,6 @@ func Api(r *gin.Engine) {
 		guru.POST("/", tc.CreateGuru)
 		guru.PUT("/:id", tc.UpdateGuru)
 		guru.DELETE("/:id", tc.DeleteGuru)
-
 	}
 
 	waliKelas := api.Group("/wali-kelas")
@@ -80,7 +80,6 @@ func Api(r *gin.Engine) {
 		siswa.GET("/:id", tc.GetSiswaByID)
 		siswa.PUT("/:id", tc.UpdateSiswa)
 		siswa.DELETE("/:id", tc.DeleteSiswa)
-
 	}
 
 	siswaaja := api.Group("/siswa")

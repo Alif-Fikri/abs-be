@@ -334,15 +334,78 @@ func loginSiswaAll(c *gin.Context, req requests.AllLoginRequest) {
 	})
 }
 
+func LoginAutoRole(c *gin.Context) {
+	var req struct {
+		Email    string `json:"email" binding:"required,email"`
+		Password string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "data tidak valid: "+err.Error())
+		return
+	}
+
+	var admin models.Admin
+	if err := database.DB.Where("email = ?", req.Email).First(&admin).Error; err == nil {
+		if !utils.CheckPasswordHash(req.Password, admin.Password) {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "password salah")
+			return
+		}
+		token, _ := utils.GenerateToken(admin.ID, "admin")
+		database.DB.Create(&models.Session{UserID: admin.ID, Token: token, Role: "admin"})
+		utils.SuccessResponse(c, http.StatusOK, "login berhasil", gin.H{
+			"token": token,
+			"role":  "admin",
+		})
+		return
+	}
+
+	var guru models.Guru
+	if err := database.DB.Where("email = ?", req.Email).First(&guru).Error; err == nil {
+		if !utils.CheckPasswordHash(req.Password, guru.Password) {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "password salah")
+			return
+		}
+		var waliKelasCount int64
+		database.DB.Model(&models.GuruRole{}).
+			Where("guru_id = ? AND role = 'wali_kelas'", guru.ID).
+			Count(&waliKelasCount)
+		role := "guru"
+		if waliKelasCount > 0 {
+			role = "wali_kelas"
+		}
+		token, _ := utils.GenerateToken(guru.ID, role)
+		database.DB.Create(&models.Session{UserID: guru.ID, Token: token, Role: role})
+		utils.SuccessResponse(c, http.StatusOK, "login berhasil", gin.H{
+			"token": token,
+			"role":  role,
+		})
+		return
+	}
+
+	var siswa models.Siswa
+	if err := database.DB.Where("email = ?", req.Email).First(&siswa).Error; err == nil {
+		if !utils.CheckPasswordHash(req.Password, siswa.Password) {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "password salah")
+			return
+		}
+		token, _ := utils.GenerateToken(siswa.ID, "siswa")
+		database.DB.Create(&models.Session{UserID: siswa.ID, Token: token, Role: "siswa"})
+		utils.SuccessResponse(c, http.StatusOK, "login berhasil", gin.H{
+			"token": token,
+			"role":  "siswa",
+		})
+		return
+	}
+	utils.ErrorResponse(c, http.StatusUnauthorized, "email tidak ditemukan")
+}
+
 func Logout(c *gin.Context) {
-	// Dapatkan token dari header Authorization
 	tokenString := c.GetHeader("Authorization")
 	if tokenString == "" {
 		utils.ErrorResponse(c, http.StatusBadRequest, "token tidak ditemukan")
 		return
 	}
 
-	// Dapatkan user_id dan role dari context (setelah melewati middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user_id tidak ditemukan")
@@ -380,5 +443,63 @@ func Logout(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "logout berhasil dan token baru dibuat", gin.H{
 		"message":   "token baru udh dibuat",
 		"new_token": newToken,
+	})
+}
+
+func RegisterAdmin(c *gin.Context) {
+	var req requests.AdminRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "data tidak valid: "+err.Error())
+		return
+	}
+
+	if req.Password != req.ConfirmPassword {
+		utils.ErrorResponse(c, http.StatusBadRequest, "password dan konfirmasi tidak cocok")
+		return
+	}
+
+	var existing models.Admin
+	if err := database.DB.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+		utils.ErrorResponse(c, http.StatusConflict, "email sudah terdaftar")
+		return
+	}
+
+	hashed, err := utils.HashPassword(req.Password)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal memproses password")
+		return
+	}
+
+	admin := models.Admin{
+		Nama:     req.Nama,
+		Email:    req.Email,
+		Password: hashed,
+	}
+
+	if err := database.DB.Create(&admin).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal menyimpan admin: "+err.Error())
+		return
+	}
+
+	token, err := utils.GenerateToken(admin.ID, "admin")
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal membuat token")
+		return
+	}
+
+	session := models.Session{
+		UserID: admin.ID,
+		Token:  token,
+		Role:   "admin",
+	}
+
+	if err := database.DB.Create(&session).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal menyimpan sesi login")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusCreated, "registrasi admin berhasil", gin.H{
+		"token": token,
+		"admin": requests.LoginResponse{ID: admin.ID, Email: admin.Email, Nama: admin.Nama},
 	})
 }

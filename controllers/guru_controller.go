@@ -95,6 +95,11 @@ func UpdateGuru(c *gin.Context) {
 		return
 	}
 
+	if req.JenisKelamin != "L" && req.JenisKelamin != "P" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "jeniskelamin harus 'L' atau 'P'"})
+		return
+	}
+
 	guru.Nama = req.Nama
 	guru.NIP = req.NIP
 	guru.NIK = req.NIK

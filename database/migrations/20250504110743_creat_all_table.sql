@@ -96,6 +96,7 @@ CREATE TABLE siswas (
     email VARCHAR(100) UNIQUE,
     telepon VARCHAR(20),
     asal_sekolah VARCHAR(100) NOT NULL,
+    password VARCHAR(255) NOT NULL,
     kelas_id INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -148,14 +149,32 @@ CREATE TABLE todos (
     FOREIGN KEY (user_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE kelas_siswas (
+    siswa_id INT NOT NULL,
+    kelas_id INT NOT NULL,
+    PRIMARY KEY (siswa_id, kelas_id),
+    FOREIGN KEY (siswa_id) REFERENCES siswas(id) ON DELETE CASCADE,
+    FOREIGN KEY (kelas_id) REFERENCES kelas(id) ON DELETE CASCADE
+);
+
+CREATE TABLE mapel_siswas (
+    siswa_id INT NOT NULL,
+    mapel_id INT NOT NULL,
+    PRIMARY KEY (siswa_id, mapel_id),
+    FOREIGN KEY (siswa_id) REFERENCES siswas(id) ON DELETE CASCADE,
+    FOREIGN KEY (mapel_id) REFERENCES mata_pelajarans(id) ON DELETE CASCADE
+);
+
 -- +goose Down
-DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS todos;
 DROP TABLE IF EXISTS absensi_siswas;
-DROP TABLE IF EXISTS siswas;
 DROP TABLE IF EXISTS guru_mapel_kelas;
+DROP TABLE IF EXISTS guru_roles;
+DROP TABLE IF EXISTS siswas;
 DROP TABLE IF EXISTS mata_pelajarans;
 DROP TABLE IF EXISTS kelas;
-DROP TABLE IF EXISTS guru_roles;
+DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS gurus;
 DROP TABLE IF EXISTS admins;
-DROP TABLE IF EXISTS todos;
+DROP TABLE IF EXISTS mapel_siswas;
+DROP TABLE IF EXISTS kelas_siswas;

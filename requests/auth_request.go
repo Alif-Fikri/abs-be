@@ -13,5 +13,5 @@ type AdminLoginRequest struct {
 type AllLoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
-	Role     string `json:"role" binding:"required,oneof=admin guru wali_kelas"`
+	Role     string `json:"role" binding:"required"`
 }
