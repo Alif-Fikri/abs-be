@@ -9,28 +9,28 @@ import (
 
 func Api(r *gin.Engine) {
 	api := r.Group("/api")
-	api.POST("/login", tc.LoginAutoRole)
-	api.POST("/guru/login", tc.LoginGuru)
-	api.POST("/admin/login", tc.LoginAdmin)
-	api.POST("/admin/register", tc.RegisterAdmin)
-	api.POST("/wali-kelas/login", tc.LoginWaliKelas)
+	api.POST("/login", tc.LoginAutoRole) // dipake
+	api.POST("/guru/login", tc.LoginGuru) // ga dipake (cuma testing)
+	api.POST("/admin/login", tc.LoginAdmin) // ga dipake (cuma testing)
+	api.POST("/admin/register", tc.RegisterAdmin) 
+	api.POST("/wali-kelas/login", tc.LoginWaliKelas) // ga dipake (cuma testing)
 	api.POST("/logout", middlewares.AuthMiddleware(), tc.Logout)
 
 	api.GET("/dashboard-guru", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("guru"), func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "dashboard Guru"})
+		c.JSON(200, gin.H{"message": "dashboard Guru"}) // ga dipake (cuma testing)
 	})
 
 	api.GET("/dashboard-admin", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin"), func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "dashboard Admin"})
+		c.JSON(200, gin.H{"message": "dashboard Admin"}) // ga dipake (cuma testing)
 	})
 
 	api.GET("/dashboard-walikelas", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("wali_kelas"), func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "dashboard Wali Kelas"})
+		c.JSON(200, gin.H{"message": "dashboard Wali Kelas"}) // ga dipake (cuma testing)
 
 	})
 
 	api.GET("/dashboard-siswa", middlewares.AuthMiddleware(), middlewares.RoleMiddleware("siswa"), func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "dashboard Siswa"})
+		c.JSON(200, gin.H{"message": "dashboard Siswa"}) // ga dipake (cuma testing)
 	})
 
 	guru := api.Group("/guru")
@@ -41,6 +41,8 @@ func Api(r *gin.Engine) {
 		guru.POST("/", tc.CreateGuru)
 		guru.PUT("/:id", tc.UpdateGuru)
 		guru.DELETE("/:id", tc.DeleteGuru)
+		guru.POST("/assign-mapel", tc.AssignMapelKelas)
+		guru.POST("/assign-walikelas", tc.AssignWaliKelas)
 	}
 
 	waliKelas := api.Group("/wali-kelas")

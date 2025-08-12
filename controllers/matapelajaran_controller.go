@@ -7,6 +7,7 @@ import (
 	"abs-be/utils"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,10 +19,28 @@ func CreateMataPelajaran(c *gin.Context) {
 		return
 	}
 
+	layout := "15:04"
+	jamMulai, err := time.Parse(layout, req.JamMulai)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam mulai salah, gunakan HH:MM")
+		return
+	}
+
+	jamSelesai, err := time.Parse(layout, req.JamSelesai)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam selesai salah, gunakan HH:MM")
+		return
+	}
+
 	newMapel := models.MataPelajaran{
-		Nama:    req.Nama,
-		Kode:    req.Kode,
-		Tingkat: req.Tingkat,
+		Nama:       req.Nama,
+		Kode:       req.Kode,
+		Tingkat:    req.Tingkat,
+		Semester:   req.Semester,
+		Hari:       req.Hari,
+		JamMulai:   jamMulai,
+		JamSelesai: jamSelesai,
+		IsActive:   req.IsActive,
 	}
 
 	if err := database.DB.Create(&newMapel).Error; err != nil {
@@ -78,9 +97,26 @@ func UpdateMataPelajaran(c *gin.Context) {
 		return
 	}
 
+	jamMulai, err := time.Parse("15:04", req.JamMulai)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam mulai salah, gunakan HH:MM")
+		return
+	}
+
+	jamSelesai, err := time.Parse("15:04", req.JamSelesai)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam selesai salah, gunakan HH:MM")
+		return
+	}
+
 	mapel.Nama = req.Nama
 	mapel.Kode = req.Kode
 	mapel.Tingkat = req.Tingkat
+	mapel.Semester = req.Semester
+	mapel.Hari = req.Hari
+	mapel.JamMulai = jamMulai
+	mapel.JamSelesai = jamSelesai
+	mapel.IsActive = req.IsActive
 
 	if err := database.DB.Save(&mapel).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui data mata pelajaran")

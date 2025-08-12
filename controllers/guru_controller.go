@@ -50,7 +50,9 @@ func CreateGuru(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := utils.HashPassword(req.Password)
+	plainPassword := req.NIP
+
+	hashedPassword, err := utils.HashPassword(plainPassword)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengenkripsi password")
 		return
@@ -72,7 +74,9 @@ func CreateGuru(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, "Guru berhasil dibuat", newGuru)
+	utils.SuccessResponse(c, http.StatusCreated, "Guru berhasil dibuat", gin.H{
+		"guru": newGuru,
+	})
 }
 
 func UpdateGuru(c *gin.Context) {
@@ -107,7 +111,6 @@ func UpdateGuru(c *gin.Context) {
 	guru.Telepon = req.Telepon
 	guru.Alamat = req.Alamat
 	guru.JenisKelamin = req.JenisKelamin
-	guru.Password = req.Password
 
 	if err := database.DB.Save(&guru).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "gagal memperbarui data guru")
@@ -178,4 +181,36 @@ func AssignWaliKelas(c *gin.Context) {
 
 	tx.Commit()
 	utils.SuccessResponse(c, http.StatusOK, "Wali kelas berhasil ditetapkan", nil)
+}
+
+func AssignMapelKelas(c *gin.Context) {
+	var req requests.AssignMapelKelasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Data tidak valid: "+err.Error())
+		return
+	}
+
+	var existing models.GuruMapelKelas
+	if err := database.DB.Where(
+		"guru_id = ? AND mapel_id = ? AND kelas_id = ? AND tahun_ajaran = ? AND semester = ?",
+		req.GuruID, req.MapelID, req.KelasID, req.TahunAjaran, req.Semester,
+	).First(&existing).Error; err == nil {
+		utils.ErrorResponse(c, http.StatusConflict, "Guru sudah mengajar mapel ini di kelas dan periode tersebut")
+		return
+	}
+
+	newAssign := models.GuruMapelKelas{
+		GuruID:      req.GuruID,
+		MapelID:     req.MapelID,
+		KelasID:     req.KelasID,
+		TahunAjaran: req.TahunAjaran,
+		Semester:    req.Semester,
+	}
+
+	if err := database.DB.Create(&newAssign).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menetapkan guru ke mapel dan kelas")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusCreated, "Guru berhasil ditetapkan ke mapel dan kelas", newAssign)
 }

@@ -41,6 +41,8 @@ type GuruMapelKelas struct {
 	MataPelajaran MataPelajaran
 	KelasID       uint `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
 	Kelas         Kelas
+	TahunAjaran   string `gorm:"type:varchar(9);not null;uniqueIndex:idx_guru_mapel_kelas"`
+	Semester      string `gorm:"type:enum('ganjil','genap');not null;uniqueIndex:idx_guru_mapel_kelas"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
