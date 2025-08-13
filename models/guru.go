@@ -34,15 +34,15 @@ type GuruRole struct {
 }
 
 type GuruMapelKelas struct {
-	ID            uint `gorm:"primaryKey"`
-	GuruID        uint `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
-	Guru          Guru
-	MapelID       uint `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
-	MataPelajaran MataPelajaran
-	KelasID       uint `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
-	Kelas         Kelas
-	TahunAjaran   string `gorm:"type:varchar(9);not null;uniqueIndex:idx_guru_mapel_kelas"`
-	Semester      string `gorm:"type:enum('ganjil','genap');not null;uniqueIndex:idx_guru_mapel_kelas"`
+	ID            uint          `gorm:"primaryKey"`
+	GuruID        uint          `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
+	Guru          Guru          `gorm:"foreignKey:GuruID"`
+	MapelID       uint          `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
+	MataPelajaran MataPelajaran `gorm:"foreignKey:MapelID;references:ID"`
+	KelasID       uint          `gorm:"not null;uniqueIndex:idx_guru_mapel_kelas"`
+	Kelas         Kelas         `gorm:"foreignKey:KelasID"`
+	TahunAjaran   string        `gorm:"type:varchar(9);not null;uniqueIndex:idx_guru_mapel_kelas"`
+	Semester      string        `gorm:"type:enum('ganjil','genap');not null;uniqueIndex:idx_guru_mapel_kelas"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

@@ -42,7 +42,11 @@ func Api(r *gin.Engine) {
 		guru.PUT("/:id", tc.UpdateGuru)
 		guru.DELETE("/:id", tc.DeleteGuru)
 		guru.POST("/assign-mapel", tc.AssignMapelKelas)
+		guru.GET("/assign-mapel/", tc.ListAssignMapelKelas)
+		guru.PUT("/assign-mapel/:id", tc.UpdateAssignMapelKelas)
+		guru.DELETE("/assign-mapel/:id", tc.DeleteAssignMapelKelas)
 		guru.POST("/assign-walikelas", tc.AssignWaliKelas)
+		guru.POST("/unassign-walikelas", tc.UnassignWaliKelas)
 	}
 
 	waliKelas := api.Group("/wali-kelas")

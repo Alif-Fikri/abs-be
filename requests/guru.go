@@ -21,6 +21,10 @@ type AssignWaliKelasRequest struct {
 	KelasID uint `json:"kelas_id" binding:"required"`
 }
 
+type UnassignWaliKelasRequest struct {
+	KelasID uint `json:"kelas_id" binding:"required"`
+}
+
 type AssignMapelKelasRequest struct {
 	GuruID      uint   `json:"guru_id" binding:"required"`
 	MapelID     uint   `json:"mapel_id" binding:"required"`
