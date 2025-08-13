@@ -95,6 +95,10 @@ func Api(r *gin.Engine) {
 	absensi.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin", "guru", "wali_kelas"))
 	{
 		absensi.POST("/", tc.CreateAbsensiSiswa)
+		absensi.GET("/", tc.GetAbsensi)
+		absensi.GET("/:id", tc.GetAbsensiByID)
+		absensi.PUT("/:id", tc.UpdateAbsensiSiswa)
+		absensi.DELETE("/:id", tc.DeleteAbsensiSiswa)
 		absensi.GET("/list/mapel", tc.ListStudentsForMapel)
 		absensi.GET("/list/kelas", tc.ListStudentsForKelas)
 		absensi.GET("/rekap/mapel", tc.RecapAbsensiMapel)
