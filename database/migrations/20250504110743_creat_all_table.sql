@@ -41,8 +41,8 @@ CREATE TABLE mata_pelajarans (
     tingkat ENUM('SD','SMP','SMA') NOT NULL DEFAULT 'SMP',
     semester ENUM('ganjil','genap'),
     hari ENUM('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu') DEFAULT 'Senin',
-    jam_mulai TIME,
-    jam_selesai TIME,
+    jam_mulai TIME NOT NULL,
+    jam_selesai TIME NOT NULL,
     is_active BOOLEAN DEFAULT true,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -138,15 +138,23 @@ ALTER TABLE sessions ADD INDEX idx_user_id (user_id);
 
 CREATE TABLE todos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    role ENUM('admin', 'guru', 'wali_kelas') NOT NULL,
+    admin_id INT DEFAULT NULL,
+    guru_id INT DEFAULT NULL,
+    wali_kelas_id INT DEFAULT NULL,
+    role ENUM('admin','guru','wali_kelas') NOT NULL,
     tanggal DATE NOT NULL,
     deskripsi TEXT NOT NULL,
-    is_done BOOLEAN DEFAULT false,
+    is_done BOOLEAN DEFAULT FALSE,
     jam_dibuat TIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES sessions(id) ON DELETE CASCADE
+    CONSTRAINT fk_todo_admin FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+    CONSTRAINT fk_todo_guru FOREIGN KEY (guru_id) REFERENCES gurus(id) ON DELETE CASCADE,
+    CONSTRAINT fk_todo_wali FOREIGN KEY (wali_kelas_id) REFERENCES gurus(id) ON DELETE CASCADE,
+    INDEX idx_todo_role_admin (role, admin_id),
+    INDEX idx_todo_role_guru (role, guru_id),
+    INDEX idx_todo_role_wali (role, wali_kelas_id),
+    INDEX idx_todo_tanggal (tanggal)
 );
 
 CREATE TABLE kelas_siswas (

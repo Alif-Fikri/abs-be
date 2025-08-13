@@ -9,10 +9,10 @@ import (
 
 func Api(r *gin.Engine) {
 	api := r.Group("/api")
-	api.POST("/login", tc.LoginAutoRole) // dipake
-	api.POST("/guru/login", tc.LoginGuru) // ga dipake (cuma testing)
+	api.POST("/login", tc.LoginAutoRole)    // dipake
+	api.POST("/guru/login", tc.LoginGuru)   // ga dipake (cuma testing)
 	api.POST("/admin/login", tc.LoginAdmin) // ga dipake (cuma testing)
-	api.POST("/admin/register", tc.RegisterAdmin) 
+	api.POST("/admin/register", tc.RegisterAdmin)
 	api.POST("/wali-kelas/login", tc.LoginWaliKelas) // ga dipake (cuma testing)
 	api.POST("/logout", middlewares.AuthMiddleware(), tc.Logout)
 
@@ -92,7 +92,7 @@ func Api(r *gin.Engine) {
 	}
 
 	absensi := api.Group("/absensi")
-	absensi.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("guru", "wali_kelas"))
+	absensi.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin", "guru", "wali_kelas"))
 	{
 		absensi.POST("/", tc.CreateAbsensiSiswa)
 		absensi.GET("/list/mapel", tc.ListStudentsForMapel)

@@ -20,17 +20,17 @@ func CreateMataPelajaran(c *gin.Context) {
 	}
 
 	layout := "15:04"
-	jamMulai, err := time.Parse(layout, req.JamMulai)
-	if err != nil {
+	if _, err := time.Parse(layout, req.JamMulai); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam mulai salah, gunakan HH:MM")
 		return
 	}
-
-	jamSelesai, err := time.Parse(layout, req.JamSelesai)
-	if err != nil {
+	if _, err := time.Parse(layout, req.JamSelesai); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam selesai salah, gunakan HH:MM")
 		return
 	}
+
+	jamMulaiStr := req.JamMulai + ":00"
+	jamSelesaiStr := req.JamSelesai + ":00"
 
 	newMapel := models.MataPelajaran{
 		Nama:       req.Nama,
@@ -38,8 +38,8 @@ func CreateMataPelajaran(c *gin.Context) {
 		Tingkat:    req.Tingkat,
 		Semester:   req.Semester,
 		Hari:       req.Hari,
-		JamMulai:   jamMulai,
-		JamSelesai: jamSelesai,
+		JamMulai:   jamMulaiStr,
+		JamSelesai: jamSelesaiStr,
 		IsActive:   req.IsActive,
 	}
 
@@ -97,25 +97,26 @@ func UpdateMataPelajaran(c *gin.Context) {
 		return
 	}
 
-	jamMulai, err := time.Parse("15:04", req.JamMulai)
-	if err != nil {
+	layout := "15:04"
+	if _, err := time.Parse(layout, req.JamMulai); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam mulai salah, gunakan HH:MM")
 		return
 	}
-
-	jamSelesai, err := time.Parse("15:04", req.JamSelesai)
-	if err != nil {
+	if _, err := time.Parse(layout, req.JamSelesai); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "Format jam selesai salah, gunakan HH:MM")
 		return
 	}
+
+	jamMulaiStr := req.JamMulai + ":00"
+	jamSelesaiStr := req.JamSelesai + ":00"
 
 	mapel.Nama = req.Nama
 	mapel.Kode = req.Kode
 	mapel.Tingkat = req.Tingkat
 	mapel.Semester = req.Semester
 	mapel.Hari = req.Hari
-	mapel.JamMulai = jamMulai
-	mapel.JamSelesai = jamSelesai
+	mapel.JamMulai = jamMulaiStr
+	mapel.JamSelesai = jamSelesaiStr
 	mapel.IsActive = req.IsActive
 
 	if err := database.DB.Save(&mapel).Error; err != nil {
