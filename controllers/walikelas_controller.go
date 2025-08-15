@@ -34,18 +34,6 @@ func GetAllWaliKelas(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "berhasil mengambil data wali kelas", result)
 }
 
-func GetKelasWaliKelas(c *gin.Context) {
-	guruID := c.MustGet("userID").(uint)
-
-	var kelas models.Kelas
-	if err := database.DB.Preload("WaliKelas").Where("wali_kelas_id = ?", guruID).First(&kelas).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusNotFound, "guru ini bukan wali kelas dari kelas manapun")
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "guru ini adalah wali kelas", kelas)
-}
-
 func GetSiswaByWaliKelas(c *gin.Context) {
 	guruIDParam := c.Param("guruID")
 	guruID, err := strconv.Atoi(guruIDParam)
@@ -124,4 +112,74 @@ func RemoveWaliKelas(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Wali kelas berhasil dihapus dari kelas", kelas)
+}
+
+func GetKelasWali(c *gin.Context) {
+	roleVal, ok := c.Get("role")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "role tidak ditemukan di context")
+		return
+	}
+	role, _ := roleVal.(string)
+
+	db := database.DB
+
+	if role == "wali_kelas" {
+		uidVal, ok := c.Get("user_id")
+		if !ok {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "user_id tidak ditemukan di context")
+			return
+		}
+		var userID uint
+		switch v := uidVal.(type) {
+		case uint:
+			userID = v
+		case int:
+			userID = uint(v)
+		case int64:
+			userID = uint(v)
+		case float64:
+			userID = uint(v)
+		default:
+			utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
+			return
+		}
+
+		var kelas models.Kelas
+		if err := db.Preload("WaliKelas").Where("wali_kelas_id = ?", userID).Find(&kelas).Error; err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data kelas: "+err.Error())
+			return
+		}
+
+		utils.SuccessResponse(c, http.StatusOK, "Kelas yang Anda wali", kelas)
+		return
+	}
+
+	if role == "admin" {
+		q := c.Query("kelas_id")
+		if q == "" {
+
+			var kelasList []models.Kelas
+			if err := db.Preload("WaliKelas").Find(&kelasList).Error; err != nil {
+				utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil daftar kelas: "+err.Error())
+				return
+			}
+			utils.SuccessResponse(c, http.StatusOK, "Daftar kelas", kelasList)
+			return
+		}
+		id64, err := strconv.ParseUint(q, 10, 64)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "kelas_id tidak valid")
+			return
+		}
+		var kelas models.Kelas
+		if err := db.Preload("WaliKelas").First(&kelas, uint(id64)).Error; err != nil {
+			utils.ErrorResponse(c, http.StatusNotFound, "Kelas tidak ditemukan")
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Detail kelas", kelas)
+		return
+	}
+
+	utils.ErrorResponse(c, http.StatusForbidden, "akses ditolak")
 }

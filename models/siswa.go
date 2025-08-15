@@ -19,8 +19,9 @@ type Siswa struct {
 	Email         string           `gorm:"type:varchar(100);unique"`
 	Telepon       string           `gorm:"type:varchar(20)"`
 	AsalSekolah   string           `gorm:"type:varchar(100);not null"`
+	KelasID       *uint            `gorm:"index"`
 	Kelas         []*Kelas         `gorm:"many2many:kelas_siswas;"`
-	MataPelajaran []*MataPelajaran `gorm:"many2many:mapel_siswas;"`
+	MataPelajaran []*MataPelajaran `gorm:"many2many:mapel_siswas;joinForeignKey:SiswaID;joinReferences:MapelID"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

@@ -136,3 +136,69 @@ func DeleteGuru(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "berhasil menghapus data guru", nil)
 }
 
+func GetPengajaranGuru(c *gin.Context) {
+	roleVal, ok := c.Get("role")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "role tidak ditemukan di context")
+		return
+	}
+	role, _ := roleVal.(string)
+
+	var guruID uint
+	if role == "guru" {
+		uidVal, ok := c.Get("user_id")
+		if !ok {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "user_id tidak ditemukan di context")
+			return
+		}
+		switch v := uidVal.(type) {
+		case uint:
+			guruID = v
+		case int:
+			guruID = uint(v)
+		case int64:
+			guruID = uint(v)
+		case float64:
+			guruID = uint(v)
+		default:
+			utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
+			return
+		}
+	} else if role == "admin" {
+		gq := c.Query("guru_id")
+		if gq == "" {
+			utils.ErrorResponse(c, http.StatusBadRequest, "admin harus menyertakan query param guru_id")
+			return
+		}
+		id64, err := strconv.ParseUint(gq, 10, 64)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "guru_id tidak valid")
+			return
+		}
+		guruID = uint(id64)
+	} else {
+		utils.ErrorResponse(c, http.StatusForbidden, "akses ditolak")
+		return
+	}
+
+	ta := c.DefaultQuery("tahun_ajaran", getTahunAjaranNow())
+	sem := c.DefaultQuery("semester", getSemesterNow())
+
+	db := database.DB
+
+	var rows []requests.PengajaranRow
+	err := db.Table("guru_mapel_kelas").
+		Select("guru_mapel_kelas.mapel_id, mata_pelajarans.nama as mapel_nama, guru_mapel_kelas.kelas_id, kelas.nama as kelas_nama, guru_mapel_kelas.tahun_ajaran, guru_mapel_kelas.semester").
+		Joins("JOIN mata_pelajarans ON mata_pelajarans.id = guru_mapel_kelas.mapel_id").
+		Joins("JOIN kelas ON kelas.id = guru_mapel_kelas.kelas_id").
+		Where("guru_mapel_kelas.guru_id = ? AND guru_mapel_kelas.tahun_ajaran = ? AND guru_mapel_kelas.semester = ?", guruID, ta, sem).
+		Order("kelas.nama, mata_pelajarans.nama").
+		Scan(&rows).Error
+
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data pengajaran: "+err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Daftar mapel & kelas yang diajar", rows)
+}

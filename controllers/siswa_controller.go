@@ -66,11 +66,35 @@ func CreateSiswa(c *gin.Context) {
 }
 
 func GetSiswaByKelas(c *gin.Context) {
-	kelasID := c.Param("kelasId")
+	kelasIDParam := c.Param("id")
+	kid, err := strconv.ParseUint(kelasIDParam, 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "kelasId tidak valid")
+		return
+	}
+	kidUint := uint(kid)
+
+	db := database.DB
+
+	var ids []uint
+	if err := db.
+		Table("siswas").
+		Select("DISTINCT siswas.id").
+		Joins("LEFT JOIN kelas_siswas ks ON ks.siswa_id = siswas.id").
+		Where("siswas.kelas_id = ? OR ks.kelas_id = ?", kidUint, kidUint).
+		Pluck("siswas.id", &ids).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil daftar siswa: "+err.Error())
+		return
+	}
+
+	if len(ids) == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "Tidak ada siswa di kelas tersebut")
+		return
+	}
 
 	var siswa []models.Siswa
-	if err := database.DB.Where("kelas_id = ?", kelasID).Find(&siswa).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data siswa")
+	if err := db.Preload("Kelas").Preload("MataPelajaran").Find(&siswa, ids).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memuat relasi siswa: "+err.Error())
 		return
 	}
 

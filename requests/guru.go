@@ -32,3 +32,12 @@ type AssignMapelKelasRequest struct {
 	TahunAjaran string `json:"tahun_ajaran" binding:"required,len=9"` // format: 2025/2026
 	Semester    string `json:"semester" binding:"required,oneof=ganjil genap"`
 }
+
+type PengajaranRow struct {
+	MapelID     uint   `json:"mapel_id"`
+	MapelNama   string `json:"mapel_nama"`
+	KelasID     uint   `json:"kelas_id"`
+	KelasNama   string `json:"kelas_nama"`
+	TahunAjaran string `json:"tahun_ajaran"`
+	Semester    string `json:"semester"`
+}

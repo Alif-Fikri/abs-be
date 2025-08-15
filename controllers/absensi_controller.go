@@ -28,17 +28,38 @@ func CreateAbsensiSiswa(c *gin.Context) {
 		return
 	}
 
-	role := c.MustGet("role").(string)
+	roleVal, ok := c.Get("role")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "role tidak ditemukan di context")
+		return
+	}
+	role := roleVal.(string)
+
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user_id tidak ditemukan di context")
+		return
+	}
+	var userID uint
+	switch v := userIDVal.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	default:
+		utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
+		return
+	}
 
 	switch role {
 	case "guru":
-
 		if req.TipeAbsensi != "mapel" {
 			utils.ErrorResponse(c, http.StatusForbidden, "Guru hanya dapat mengisi absen mapel")
 			return
 		}
 	case "wali_kelas":
-
 		if req.TipeAbsensi != "kelas" {
 			utils.ErrorResponse(c, http.StatusForbidden, "Wali kelas hanya dapat mengisi absen kelas")
 			return
@@ -48,8 +69,63 @@ func CreateAbsensiSiswa(c *gin.Context) {
 		return
 	}
 
-	if req.TipeAbsensi == "mapel" && req.MapelID == nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "mapel_id harus diisi untuk absen mapel")
+	var s models.Siswa
+	if err := database.DB.First(&s, req.SiswaID).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Siswa tidak ditemukan")
+		return
+	}
+
+	var count int64
+	if err := database.DB.Table("kelas_siswas").
+		Where("siswa_id = ? AND kelas_id = ?", req.SiswaID, req.KelasID).
+		Count(&count).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memeriksa keanggotaan siswa: "+err.Error())
+		return
+	}
+	if count == 0 {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Siswa tidak terdaftar di kelas yang diberikan")
+		return
+	}
+
+	if req.TipeAbsensi == "mapel" {
+		if req.MapelID == nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "mapel_id harus diisi untuk absen mapel")
+			return
+		}
+		ta := getTahunAjaranNow()
+		sem := getSemesterNow()
+		mapelIDs, err := getMapelIDsByGuruAndKelas(database.DB, userID, req.KelasID, ta, sem)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memeriksa pengajaran guru: "+err.Error())
+			return
+		}
+		found := false
+		for _, m := range mapelIDs {
+			if m == *req.MapelID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			utils.ErrorResponse(c, http.StatusForbidden, "Anda tidak mengajar mapel ini di kelas yang diminta")
+			return
+		}
+	}
+
+	guruIDForInsert := req.GuruID
+	if role == "guru" {
+		guruIDForInsert = uint(userID) 
+	}
+
+	var exist models.AbsensiSiswa
+	q := database.DB.Where("siswa_id = ? AND tanggal = ? AND tipe_absensi = ? AND kelas_id = ?", req.SiswaID, tanggal, req.TipeAbsensi, req.KelasID)
+	if req.MapelID != nil {
+		q = q.Where("mapel_id = ?", req.MapelID)
+	} else {
+		q = q.Where("mapel_id IS NULL")
+	}
+	if err := q.First(&exist).Error; err == nil {
+		utils.ErrorResponse(c, http.StatusConflict, "Absensi untuk siswa ini pada tanggal/tipe/mapel/kelas tersebut sudah ada")
 		return
 	}
 
@@ -57,7 +133,7 @@ func CreateAbsensiSiswa(c *gin.Context) {
 		SiswaID:     req.SiswaID,
 		KelasID:     req.KelasID,
 		MapelID:     req.MapelID,
-		GuruID:      req.GuruID,
+		GuruID:      uint(guruIDForInsert),
 		TipeAbsensi: req.TipeAbsensi,
 		Tanggal:     tanggal,
 		Status:      req.Status,
@@ -67,11 +143,11 @@ func CreateAbsensiSiswa(c *gin.Context) {
 	}
 
 	if err := database.DB.Create(&absensi).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menyimpan absensi")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menyimpan absensi: "+err.Error())
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Absensi berhasil disimpan", absensi)
+	utils.SuccessResponse(c, http.StatusCreated, "Absensi berhasil disimpan", absensi)
 }
 
 func UpdateAbsensiSiswa(c *gin.Context) {

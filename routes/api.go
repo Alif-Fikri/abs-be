@@ -47,14 +47,21 @@ func Api(r *gin.Engine) {
 		guru.DELETE("/assign-mapel/:id", tc.DeleteAssignMapelKelas)
 		guru.POST("/assign-walikelas", tc.AssignWaliKelas)
 		guru.POST("/unassign-walikelas", tc.UnassignWaliKelas)
+		guru.GET("/wali-kelas/daftar", tc.GetAllWaliKelas)
+	}
+
+	pengajar := api.Group("/guru")
+	pengajar.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("guru"))
+	{
+		pengajar.GET("/list-kelas", tc.GetPengajaranGuru)
 	}
 
 	waliKelas := api.Group("/wali-kelas")
 	waliKelas.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("wali_kelas"))
 	{
-		waliKelas.GET("/kelas", tc.GetKelasWaliKelas)
 		waliKelas.GET("/siswa", tc.GetSiswaByWaliKelas)
 		waliKelas.GET("/daftar", tc.GetAllWaliKelas)
+		waliKelas.GET("/list-kelas", tc.GetKelasWali)
 	}
 
 	kelas := api.Group("/kelas")
@@ -86,6 +93,10 @@ func Api(r *gin.Engine) {
 		siswa.GET("/:id", tc.GetSiswaByID)
 		siswa.PUT("/:id", tc.UpdateSiswa)
 		siswa.DELETE("/:id", tc.DeleteSiswa)
+		siswa.POST("/assign-kelas", tc.AssignSiswaToKelas)
+		siswa.POST("/unassign-kelas", tc.UnassignSiswaFromKelas)
+		siswa.POST("/assign-mapel", tc.AssignSiswaToMapel)
+		siswa.POST("/unassign-mapel", tc.UnassignSiswaFromMapel)
 	}
 
 	siswaaja := api.Group("/siswa")
