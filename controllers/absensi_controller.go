@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/csv"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -48,6 +49,8 @@ func CreateAbsensiSiswa(c *gin.Context) {
 		userID = uint(v)
 	case int64:
 		userID = uint(v)
+	case float64:
+		userID = uint(v)
 	default:
 		utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
 		return
@@ -92,18 +95,34 @@ func CreateAbsensiSiswa(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusBadRequest, "mapel_id harus diisi untuk absen mapel")
 			return
 		}
+
 		ta := getTahunAjaranNow()
 		sem := getSemesterNow()
+
 		mapelIDs, err := getMapelIDsByGuruAndKelas(database.DB, userID, req.KelasID, ta, sem)
 		if err != nil {
 			utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memeriksa pengajaran guru: "+err.Error())
 			return
 		}
+
 		found := false
 		for _, m := range mapelIDs {
 			if m == *req.MapelID {
 				found = true
 				break
+			}
+		}
+		if !found {
+			mapelIDsLoose, err := getMapelIDsByGuruAndKelas(database.DB, userID, req.KelasID, "", "")
+			if err != nil {
+				utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memeriksa pengajaran guru (fallback): "+err.Error())
+				return
+			}
+			for _, m := range mapelIDsLoose {
+				if m == *req.MapelID {
+					found = true
+					break
+				}
 			}
 		}
 		if !found {
@@ -114,18 +133,26 @@ func CreateAbsensiSiswa(c *gin.Context) {
 
 	guruIDForInsert := req.GuruID
 	if role == "guru" {
-		guruIDForInsert = uint(userID) 
+		guruIDForInsert = userID
 	}
 
 	var exist models.AbsensiSiswa
-	q := database.DB.Where("siswa_id = ? AND tanggal = ? AND tipe_absensi = ? AND kelas_id = ?", req.SiswaID, tanggal, req.TipeAbsensi, req.KelasID)
+	q := database.DB.
+		Where("siswa_id = ? AND DATE(tanggal) = ? AND tipe_absensi = ? AND kelas_id = ?",
+			req.SiswaID, tanggal.Format("2006-01-02"), req.TipeAbsensi, req.KelasID)
+
 	if req.MapelID != nil {
 		q = q.Where("mapel_id = ?", req.MapelID)
 	} else {
 		q = q.Where("mapel_id IS NULL")
 	}
+
+	if role == "guru" {
+		q = q.Where("guru_id = ?", userID)
+	}
+
 	if err := q.First(&exist).Error; err == nil {
-		utils.ErrorResponse(c, http.StatusConflict, "Absensi untuk siswa ini pada tanggal/tipe/mapel/kelas tersebut sudah ada")
+		utils.ErrorResponse(c, http.StatusConflict, "Absensi untuk siswa ini pada tanggal/tipe/mapel/kelas oleh guru ini sudah ada")
 		return
 	}
 
@@ -133,7 +160,7 @@ func CreateAbsensiSiswa(c *gin.Context) {
 		SiswaID:     req.SiswaID,
 		KelasID:     req.KelasID,
 		MapelID:     req.MapelID,
-		GuruID:      uint(guruIDForInsert),
+		GuruID:      guruIDForInsert,
 		TipeAbsensi: req.TipeAbsensi,
 		Tanggal:     tanggal,
 		Status:      req.Status,
@@ -147,7 +174,66 @@ func CreateAbsensiSiswa(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, "Absensi berhasil disimpan", absensi)
+	var full models.AbsensiSiswa
+	if err := database.DB.
+		Preload("Siswa", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "nisn", "tanggal_lahir", "jenis_kelamin")
+		}).
+		Preload("Kelas", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "tingkat", "tahun_ajaran")
+		}).
+		Preload("MataPelajaran", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "kode")
+		}).
+		Preload("Guru", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "nip", "email")
+		}).
+		First(&full, absensi.ID).Error; err != nil {
+		utils.SuccessResponse(c, http.StatusCreated, "Absensi berhasil disimpan", absensi)
+		return
+	}
+
+	resp := requests.AbsensiResponse{
+		ID: full.ID,
+		Siswa: requests.SiswaPublic{
+			ID:           full.Siswa.ID,
+			Nama:         full.Siswa.Nama,
+			NISN:         full.Siswa.NISN,
+			JenisKelamin: full.Siswa.JenisKelamin,
+		},
+		Kelas: requests.KelasPublic{
+			ID:          full.Kelas.ID,
+			Nama:        full.Kelas.Nama,
+			Tingkat:     full.Kelas.Tingkat,
+			TahunAjaran: full.Kelas.TahunAjaran,
+		},
+		TipeAbsensi: full.TipeAbsensi,
+		Tanggal:     full.Tanggal.Format("2006-01-02"),
+		Status:      full.Status,
+		Keterangan:  full.Keterangan,
+		TahunAjaran: full.TahunAjaran,
+		Semester:    full.Semester,
+		CreatedAt:   full.CreatedAt,
+		UpdatedAt:   full.UpdatedAt,
+	}
+
+	if full.MapelID != nil && full.MataPelajaran.ID != 0 {
+		mp := requests.MapelPublic{
+			ID:   full.MataPelajaran.ID,
+			Nama: full.MataPelajaran.Nama,
+			Kode: full.MataPelajaran.Kode,
+		}
+		resp.Mapel = &mp
+	}
+
+	resp.Guru = requests.GuruPublic{
+		ID:    full.Guru.ID,
+		Nama:  full.Guru.Nama,
+		NIP:   full.Guru.NIP,
+		Email: full.Guru.Email,
+	}
+
+	utils.SuccessResponse(c, http.StatusCreated, "Absensi berhasil disimpan", resp)
 }
 
 func UpdateAbsensiSiswa(c *gin.Context) {
@@ -241,11 +327,87 @@ func UpdateAbsensiSiswa(c *gin.Context) {
 	}
 
 	if err := database.DB.Save(&absensi).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui absensi")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memperbarui absensi: "+err.Error())
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Absensi berhasil diperbarui", absensi)
+	var full models.AbsensiSiswa
+	if err := database.DB.
+		Preload("Siswa", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "nisn", "tanggal_lahir", "jenis_kelamin")
+		}).
+		Preload("Kelas", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "tingkat", "tahun_ajaran")
+		}).
+		Preload("MataPelajaran", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "kode")
+		}).
+		Preload("Guru", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "nama", "nip", "email")
+		}).
+		First(&full, absensi.ID).Error; err != nil {
+		respFallback := requests.AbsensiResponse{
+			ID: absensi.ID,
+			Siswa: requests.SiswaPublic{
+				ID: absensi.SiswaID,
+			},
+			Kelas: requests.KelasPublic{
+				ID: absensi.KelasID,
+			},
+			TipeAbsensi: absensi.TipeAbsensi,
+			Tanggal:     absensi.Tanggal.Format("2006-01-02"),
+			Status:      absensi.Status,
+			Keterangan:  absensi.Keterangan,
+			TahunAjaran: absensi.TahunAjaran,
+			Semester:    absensi.Semester,
+			CreatedAt:   absensi.CreatedAt,
+			UpdatedAt:   absensi.UpdatedAt,
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Absensi berhasil diperbarui", respFallback)
+		return
+	}
+
+	resp := requests.AbsensiResponse{
+		ID: full.ID,
+		Siswa: requests.SiswaPublic{
+			ID:           full.Siswa.ID,
+			Nama:         full.Siswa.Nama,
+			NISN:         full.Siswa.NISN,
+			JenisKelamin: full.Siswa.JenisKelamin,
+		},
+		Kelas: requests.KelasPublic{
+			ID:          full.Kelas.ID,
+			Nama:        full.Kelas.Nama,
+			Tingkat:     full.Kelas.Tingkat,
+			TahunAjaran: full.Kelas.TahunAjaran,
+		},
+		TipeAbsensi: full.TipeAbsensi,
+		Tanggal:     full.Tanggal.Format("2006-01-02"),
+		Status:      full.Status,
+		Keterangan:  full.Keterangan,
+		TahunAjaran: full.TahunAjaran,
+		Semester:    full.Semester,
+		CreatedAt:   full.CreatedAt,
+		UpdatedAt:   full.UpdatedAt,
+	}
+
+	if full.MapelID != nil && full.MataPelajaran.ID != 0 {
+		mp := requests.MapelPublic{
+			ID:   full.MataPelajaran.ID,
+			Nama: full.MataPelajaran.Nama,
+			Kode: full.MataPelajaran.Kode,
+		}
+		resp.Mapel = &mp
+	}
+
+	resp.Guru = requests.GuruPublic{
+		ID:    full.Guru.ID,
+		Nama:  full.Guru.Nama,
+		NIP:   full.Guru.NIP,
+		Email: full.Guru.Email,
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Absensi berhasil diperbarui", resp)
 }
 
 func DeleteAbsensiSiswa(c *gin.Context) {
@@ -340,25 +502,43 @@ func ListStudentsForMapel(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Daftar siswa untuk mapel", siswa)
+	var siswaPublic []requests.SiswaPublic
+	for _, s := range siswa {
+		siswaPublic = append(siswaPublic, requests.SiswaPublic{
+			ID:           s.ID,
+			Nama:         s.Nama,
+			NISN:         s.NISN,
+			JenisKelamin: s.JenisKelamin,
+		})
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Daftar siswa untuk mapel", siswaPublic)
 }
 
 func ListStudentsForKelas(c *gin.Context) {
-	guruID := c.MustGet("user_id").(uint)
-
-	var kelas models.Kelas
-	if err := database.DB.Where("wali_kelas_id = ?", guruID).First(&kelas).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusNotFound, "Anda belum ditetapkan wali kelas")
+	kelasID := c.Query("kelas_id")
+	if kelasID == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "kelas_id wajib")
 		return
 	}
 
 	var siswa []models.Siswa
-	if err := database.DB.Where("kelas_id = ?", kelas.ID).Find(&siswa).Error; err != nil {
+	if err := database.DB.Where("kelas_id = ?", kelasID).Find(&siswa).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil siswa")
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Daftar siswa untuk kelas Anda", siswa)
+	var siswaPublic []requests.SiswaPublic
+	for _, s := range siswa {
+		siswaPublic = append(siswaPublic, requests.SiswaPublic{
+			ID:           s.ID,
+			Nama:         s.Nama,
+			NISN:         s.NISN,
+			JenisKelamin: s.JenisKelamin,
+		})
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Daftar siswa untuk kelas", siswaPublic)
 }
 
 func RecapAbsensiMapel(c *gin.Context) {
@@ -369,22 +549,46 @@ func RecapAbsensiMapel(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, "mapel_id, kelas_id & tanggal wajib")
 		return
 	}
-	tanggal, err := time.Parse("2006-01-02", tgl)
+
+	_, err := time.Parse("2006-01-02", tgl)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah")
 		return
 	}
 
-	var recaps []struct {
-		SiswaID uint
-		Nama    string
-		Status  string
+	type RecapAbsensiMapelResponse struct {
+		SiswaID     uint   `json:"siswa_id"`
+		NamaSiswa   string `json:"nama_siswa"`
+		Status      string `json:"status"`
+		Kelas       string `json:"kelas"`
+		Mapel       string `json:"mapel"`
+		Tanggal     string `json:"tanggal"`
+		NamaGuru    string `json:"nama_guru"`
+		TahunAjaran string `json:"tahun_ajaran"`
+		Semester    string `json:"semester"`
 	}
+
+	var recaps []RecapAbsensiMapelResponse
+
 	if err := database.DB.
 		Table("absensi_siswas").
-		Select("siswa_id, siswas.nama, status").
+		Select(`
+			absensi_siswas.siswa_id,
+			siswas.nama AS nama_siswa,
+			absensi_siswas.status,
+			kelas.nama AS kelas,
+			mata_pelajarans.nama AS mapel,
+			absensi_siswas.tanggal AS tanggal,
+			gurus.nama AS nama_guru,
+			absensi_siswas.tahun_ajaran,
+			absensi_siswas.semester
+		`).
 		Joins("JOIN siswas ON siswas.id = absensi_siswas.siswa_id").
-		Where("tipe_absensi = ? AND mapel_id = ? AND kelas_id = ? AND tanggal = ?", "mapel", mapelID, kelasID, tanggal).
+		Joins("JOIN kelas ON kelas.id = absensi_siswas.kelas_id").
+		Joins("JOIN mata_pelajarans ON mata_pelajarans.id = absensi_siswas.mapel_id").
+		Joins("JOIN gurus ON gurus.id = absensi_siswas.guru_id").
+		Where("absensi_siswas.tipe_absensi = ? AND absensi_siswas.mapel_id = ? AND absensi_siswas.kelas_id = ? AND DATE(absensi_siswas.tanggal) = ?",
+			"mapel", mapelID, kelasID, tgl).
 		Scan(&recaps).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal rekap absensi mapel")
 		return
@@ -400,28 +604,226 @@ func RecapAbsensiKelas(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, "kelas_id & tanggal wajib")
 		return
 	}
-	tanggal, err := time.Parse("2006-01-02", tgl)
+
+	_, err := time.Parse("2006-01-02", tgl)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah")
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah (gunakan YYYY-MM-DD)")
 		return
 	}
 
-	var recaps []struct {
-		SiswaID uint
-		Nama    string
-		Status  string
+	type RecapAbsensiKelasResponse struct {
+		SiswaID     uint   `json:"siswa_id"`
+		NamaSiswa   string `json:"nama_siswa"`
+		Status      string `json:"status"`
+		Kelas       string `json:"kelas"`
+		Tanggal     string `json:"tanggal"`
+		WaliKelas   string `json:"wali_kelas"`
+		TahunAjaran string `json:"tahun_ajaran"`
+		Semester    string `json:"semester"`
 	}
+
+	var recaps []RecapAbsensiKelasResponse
+
 	if err := database.DB.
 		Table("absensi_siswas").
-		Select("siswa_id, siswas.nama, status").
+		Select(`
+			absensi_siswas.siswa_id,
+			siswas.nama AS nama_siswa,
+			absensi_siswas.status,
+			kelas.nama AS kelas,
+			absensi_siswas.tanggal AS tanggal,
+			gurus.nama AS wali_kelas,
+			absensi_siswas.tahun_ajaran,
+			absensi_siswas.semester
+		`).
 		Joins("JOIN siswas ON siswas.id = absensi_siswas.siswa_id").
-		Where("tipe_absensi = ? AND kelas_id = ? AND tanggal = ?", "kelas", kelasID, tanggal).
+		Joins("JOIN kelas ON kelas.id = absensi_siswas.kelas_id").
+		Joins("JOIN gurus ON gurus.id = kelas.wali_kelas_id").
+		Where("absensi_siswas.tipe_absensi = ? AND absensi_siswas.kelas_id = ? AND DATE(absensi_siswas.tanggal) = ?",
+			"kelas", kelasID, tgl).
 		Scan(&recaps).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal rekap absensi kelas")
 		return
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Rekap absensi kelas", recaps)
+}
+
+func ExportRecapAbsensiMapelCSV(c *gin.Context) {
+	mapelID := c.Query("mapel_id")
+	kelasID := c.Query("kelas_id")
+	tgl := c.Query("tanggal")
+	if mapelID == "" || kelasID == "" || tgl == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "mapel_id, kelas_id & tanggal wajib")
+		return
+	}
+
+	if _, err := time.Parse("2006-01-02", tgl); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah (gunakan YYYY-MM-DD)")
+		return
+	}
+
+	type row struct {
+		NamaSiswa   string    `json:"nama_siswa"`
+		Status      string    `json:"status"`
+		Kelas       string    `json:"kelas"`
+		Mapel       string    `json:"mapel"`
+		NamaGuru    string    `json:"nama_guru"`
+		TahunAjaran string    `json:"tahun_ajaran"`
+		Semester    string    `json:"semester"`
+		Tanggal     time.Time `json:"tanggal"`
+	}
+
+	var rows []row
+	db := database.DB
+
+	err := db.
+		Table("absensi_siswas").
+		Select(`siswas.nama AS nama_siswa,
+                absensi_siswas.status,
+                kelas.nama AS kelas,
+                mata_pelajarans.nama AS mapel,
+                gurus.nama AS nama_guru,
+                absensi_siswas.tahun_ajaran,
+                absensi_siswas.semester,
+                absensi_siswas.tanggal`).
+		Joins("JOIN siswas ON siswas.id = absensi_siswas.siswa_id").
+		Joins("JOIN kelas ON kelas.id = absensi_siswas.kelas_id").
+		Joins("JOIN mata_pelajarans ON mata_pelajarans.id = absensi_siswas.mapel_id").
+		Joins("JOIN gurus ON gurus.id = absensi_siswas.guru_id").
+		Where("absensi_siswas.tipe_absensi = ? AND absensi_siswas.mapel_id = ? AND absensi_siswas.kelas_id = ? AND DATE(absensi_siswas.tanggal) = ?",
+			"mapel", mapelID, kelasID, tgl).
+		Order("siswas.nama ASC").
+		Scan(&rows).Error
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal rekap absensi mapel: "+err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("rekap_mapel_%s_kelas_%s_%s.csv", mapelID, kelasID, tgl)
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Writer.Write([]byte("\xEF\xBB\xBF"))
+
+	w := csv.NewWriter(c.Writer)
+	defer w.Flush()
+	if err := w.Write([]string{
+		"Nama Siswa", "Status", "Kelas", "Mapel", "Guru", "Tahun Ajaran", "Semester", "Tanggal",
+	}); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat CSV")
+		return
+	}
+
+	for _, r := range rows {
+		tStr := r.Tanggal.In(time.Local).Format("2006-01-02")
+		record := []string{
+			r.NamaSiswa,
+			r.Status,
+			r.Kelas,
+			r.Mapel,
+			r.NamaGuru,
+			r.TahunAjaran,
+			r.Semester,
+			tStr,
+		}
+		if err := w.Write(record); err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menulis CSV: "+err.Error())
+			return
+		}
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menyelesaikan CSV: "+err.Error())
+		return
+	}
+}
+
+func ExportRecapAbsensiKelasCSV(c *gin.Context) {
+	kelasID := c.Query("kelas_id")
+	tgl := c.Query("tanggal")
+	if kelasID == "" || tgl == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "kelas_id & tanggal wajib")
+		return
+	}
+
+	if _, err := time.Parse("2006-01-02", tgl); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah (gunakan YYYY-MM-DD)")
+		return
+	}
+
+	type row struct {
+		NamaSiswa   string    `json:"nama_siswa"`
+		Status      string    `json:"status"`
+		Kelas       string    `json:"kelas"`
+		WaliKelas   string    `json:"wali_kelas"`
+		TahunAjaran string    `json:"tahun_ajaran"`
+		Semester    string    `json:"semester"`
+		Tanggal     time.Time `json:"tanggal"`
+	}
+
+	var rows []row
+	db := database.DB
+
+	err := db.
+		Table("absensi_siswas").
+		Select(`siswas.nama AS nama_siswa,
+                absensi_siswas.status,
+                kelas.nama AS kelas,
+                gurus.nama AS wali_kelas,
+                absensi_siswas.tahun_ajaran,
+                absensi_siswas.semester,
+                absensi_siswas.tanggal`).
+		Joins("JOIN siswas ON siswas.id = absensi_siswas.siswa_id").
+		Joins("JOIN kelas ON kelas.id = absensi_siswas.kelas_id").
+		Joins("JOIN gurus ON gurus.id = kelas.wali_kelas_id").
+		Where("absensi_siswas.tipe_absensi = ? AND absensi_siswas.kelas_id = ? AND DATE(absensi_siswas.tanggal) = ?",
+			"kelas", kelasID, tgl).
+		Order("siswas.nama ASC").
+		Scan(&rows).Error
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal rekap absensi kelas: "+err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("rekap_kelas_%s_%s.csv", kelasID, tgl)
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Writer.Write([]byte("\xEF\xBB\xBF"))
+
+	w := csv.NewWriter(c.Writer)
+	defer w.Flush()
+	if err := w.Write([]string{
+		"Nama Siswa", "Status", "Kelas", "Wali Kelas", "Tahun Ajaran", "Semester", "Tanggal",
+	}); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat CSV")
+		return
+	}
+
+	for _, r := range rows {
+		tStr := r.Tanggal.In(time.Local).Format("2006-01-02")
+		record := []string{
+			r.NamaSiswa,
+			r.Status,
+			r.Kelas,
+			r.WaliKelas,
+			r.TahunAjaran,
+			r.Semester,
+			tStr,
+		}
+		if err := w.Write(record); err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menulis CSV: "+err.Error())
+			return
+		}
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menyelesaikan CSV: "+err.Error())
+		return
+	}
 }
 
 func getTahunAjaranNow() string {
@@ -655,11 +1057,18 @@ func getMapelIDsByGuruAndKelas(db *gorm.DB, guruID uint, kelasID uint, ta string
 	var rows []struct {
 		MapelID uint `gorm:"column:mapel_id"`
 	}
-	err := db.Table("guru_mapel_kelas").
-		Select("mapel_id").
-		Where("guru_id = ? AND kelas_id = ? AND tahun_ajaran = ? AND semester = ?", guruID, kelasID, ta, semester).
-		Find(&rows).Error
-	if err != nil {
+
+	q := db.Table("guru_mapel_kelas").Select("mapel_id").
+		Where("guru_id = ? AND kelas_id = ?", guruID, kelasID)
+
+	if ta != "" {
+		q = q.Where("tahun_ajaran = ?", ta)
+	}
+	if semester != "" {
+		q = q.Where("semester = ?", semester)
+	}
+
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]uint, 0, len(rows))
@@ -674,11 +1083,14 @@ func getMapelAndKelasByGuru(db *gorm.DB, guruID uint, ta string, semester string
 		MapelID uint `gorm:"column:mapel_id"`
 		KelasID uint `gorm:"column:kelas_id"`
 	}
-	err := db.Table("guru_mapel_kelas").
-		Select("mapel_id, kelas_id").
-		Where("guru_id = ? AND tahun_ajaran = ? AND semester = ?", guruID, ta, semester).
-		Find(&rows).Error
-	if err != nil {
+	q := db.Table("guru_mapel_kelas").Select("mapel_id, kelas_id").Where("guru_id = ?", guruID)
+	if ta != "" {
+		q = q.Where("tahun_ajaran = ?", ta)
+	}
+	if semester != "" {
+		q = q.Where("semester = ?", semester)
+	}
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, nil, err
 	}
 	mapelSet := map[uint]struct{}{}

@@ -1,5 +1,7 @@
 package requests
 
+import "time"
+
 type KelasResponse struct {
 	ID            uint   `json:"id"`
 	Nama          string `json:"nama"`
@@ -61,4 +63,47 @@ type SiswaResponse struct {
 	Telepon      string `json:"telepon"`
 	AsalSekolah  string `json:"asal_sekolah"`
 	KelasID      uint   `json:"kelas_id"`
+}
+
+type SiswaPublic struct {
+	ID           uint   `json:"id"`
+	Nama         string `json:"nama"`
+	NISN         string `json:"nisn,omitempty"`
+	JenisKelamin string `json:"jenis_kelamin,omitempty"`
+}
+
+type GuruPublic struct {
+	ID    uint   `json:"id"`
+	Nama  string `json:"nama"`
+	NIP   string `json:"nip,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+type MapelPublic struct {
+	ID   uint   `json:"id"`
+	Nama string `json:"nama"`
+	Kode string `json:"kode,omitempty"`
+}
+
+type KelasPublic struct {
+	ID          uint   `json:"id"`
+	Nama        string `json:"nama"`
+	Tingkat     string `json:"tingkat"`
+	TahunAjaran string `json:"tahun_ajaran"`
+}
+
+type AbsensiResponse struct {
+	ID          uint         `json:"id"`
+	Siswa       SiswaPublic  `json:"siswa"`
+	Kelas       KelasPublic  `json:"kelas"`
+	Mapel       *MapelPublic `json:"mapel,omitempty"`
+	Guru        GuruPublic   `json:"guru"`
+	TipeAbsensi string       `json:"tipe_absensi"`
+	Tanggal     string       `json:"tanggal"`
+	Status      string       `json:"status"`
+	Keterangan  string       `json:"keterangan,omitempty"`
+	TahunAjaran string       `json:"tahun_ajaran"`
+	Semester    string       `json:"semester"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
 }

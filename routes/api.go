@@ -118,6 +118,8 @@ func Api(r *gin.Engine) {
 		absensi.GET("/list/kelas", tc.ListStudentsForKelas)
 		absensi.GET("/rekap/mapel", tc.RecapAbsensiMapel)
 		absensi.GET("/rekap/kelas", tc.RecapAbsensiKelas)
+		absensi.GET("/rekap/mapel/export", tc.ExportRecapAbsensiMapelCSV)
+		absensi.GET("/rekap/kelas/export", tc.ExportRecapAbsensiKelasCSV)
 	}
 
 	todo := api.Group("/todo")
