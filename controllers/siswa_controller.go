@@ -224,24 +224,101 @@ func GetAbsensiSiswa(c *gin.Context) {
 	tanggal := c.Query("tanggal")
 	tipe := c.Query("tipe")
 
-	query := database.DB.Where("siswa_id = ?", siswaID)
+	db := database.DB
+
+	var absensi []models.AbsensiSiswa
+	q := db.
+		Preload("Siswa").
+		Preload("Kelas").
+		Preload("MataPelajaran").
+		Preload("Guru").
+		Where("siswa_id = ?", siswaID)
 
 	if tanggal != "" {
-		t, err := time.Parse("2006-01-02", tanggal)
-		if err == nil {
-			query = query.Where("tanggal = ?", t)
+		if t, err := time.Parse("2006-01-02", tanggal); err == nil {
+			q = q.Where("DATE(tanggal) = ?", t.Format("2006-01-02"))
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "Format tanggal salah, gunakan YYYY-MM-DD")
+			return
 		}
 	}
 
-	if tipe != "" && (tipe == "kelas" || tipe == "mapel") {
-		query = query.Where("tipe_absensi = ?", tipe)
+	if tipe != "" {
+		if tipe != "kelas" && tipe != "mapel" {
+			utils.ErrorResponse(c, http.StatusBadRequest, "tipe harus 'kelas' atau 'mapel'")
+			return
+		}
+		q = q.Where("tipe_absensi = ?", tipe)
 	}
 
-	var absensi []models.AbsensiSiswa
-	if err := query.Find(&absensi).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data absensi")
+	if err := q.Order("tanggal ASC, id ASC").Find(&absensi).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data absensi: "+err.Error())
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Data absensi", absensi)
+	var resp []requests.AbsensiResponse
+	for _, a := range absensi {
+
+		siswaPub := requests.SiswaPublic{
+			ID: a.SiswaID,
+		}
+		if a.Siswa.ID != 0 {
+			siswaPub.Nama = a.Siswa.Nama
+			siswaPub.NISN = a.Siswa.NISN
+			siswaPub.JenisKelamin = a.Siswa.JenisKelamin
+		}
+
+		kelasPub := requests.KelasPublic{
+			ID:          a.KelasID,
+			Nama:        "",
+			Tingkat:     "",
+			TahunAjaran: a.TahunAjaran,
+		}
+		if a.Kelas.ID != 0 {
+			kelasPub.Nama = a.Kelas.Nama
+			kelasPub.Tingkat = a.Kelas.Tingkat
+		}
+
+		var mapelPub *requests.MapelPublic
+		if a.MapelID != nil && a.MataPelajaran.ID != 0 {
+			mapelPub = &requests.MapelPublic{
+				ID:   a.MataPelajaran.ID,
+				Nama: a.MataPelajaran.Nama,
+				Kode: a.MataPelajaran.Kode,
+			}
+		}
+
+		guruPub := requests.GuruPublic{
+			ID: 0,
+		}
+		if a.Guru.ID != 0 {
+			guruPub = requests.GuruPublic{
+				ID:    a.Guru.ID,
+				Nama:  a.Guru.Nama,
+				NIP:   a.Guru.NIP,
+				Email: a.Guru.Email,
+			}
+		} else if a.GuruID != 0 {
+			guruPub.ID = a.GuruID
+		}
+
+		entry := requests.AbsensiResponse{
+			ID:          a.ID,
+			Siswa:       siswaPub,
+			Kelas:       kelasPub,
+			Mapel:       mapelPub,
+			Guru:        guruPub,
+			TipeAbsensi: a.TipeAbsensi,
+			Tanggal:     a.Tanggal.Format("2006-01-02"),
+			Status:      a.Status,
+			Keterangan:  a.Keterangan,
+			TahunAjaran: a.TahunAjaran,
+			Semester:    a.Semester,
+			CreatedAt:   a.CreatedAt,
+			UpdatedAt:   a.UpdatedAt,
+		}
+		resp = append(resp, entry)
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Data absensi", resp)
 }
