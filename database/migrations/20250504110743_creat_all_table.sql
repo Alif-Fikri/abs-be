@@ -128,7 +128,6 @@ CREATE TABLE sessions (
     user_id INT NOT NULL,
     token VARCHAR(512) UNIQUE NOT NULL,
     role ENUM('guru','admin','wali_kelas','siswa') NOT NULL,
-    fcm_token VARCHAR(255) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at DATETIME

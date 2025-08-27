@@ -3,7 +3,8 @@ package main
 import (
 	"abs-be/database"
 	"abs-be/routes"
-	"abs-be/utils"
+	"abs-be/firebaseclient"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,7 @@ func main() {
 	r := gin.Default()
 	r.Use(cors.Default())
 	routes.Api(r)
-	utils.InitializeFirebase()
+	firebaseclient.InitFirebase(os.Getenv("FIREBASE_SA_FILE"))
 
 	if err := r.Run(":8080"); err != nil {
 		panic("gagal menjalankan server: " + err.Error())
