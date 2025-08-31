@@ -1,9 +1,13 @@
 package controllers
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"net/http"
 
 	"abs-be/database"
+	"abs-be/firebaseclient"
 	"abs-be/models"
 	"abs-be/requests"
 	"abs-be/utils"
@@ -77,6 +81,50 @@ func AssignSiswaToKelas(c *gin.Context) {
 		return
 	}
 
+	go func(siswa models.Siswa, kelas models.Kelas) {
+		var recipientIDs []uint
+		recipientIDs = append(recipientIDs, siswa.ID)
+
+		if kelas.WaliKelasID != nil && *kelas.WaliKelasID != 0 {
+			recipientIDs = append(recipientIDs, *kelas.WaliKelasID)
+		}
+
+		var adminIDs []uint
+		rowsAdmin, err := database.DB.Raw("SELECT id FROM admins").Rows()
+		if err == nil {
+			defer rowsAdmin.Close()
+			for rowsAdmin.Next() {
+				var id uint
+				_ = rowsAdmin.Scan(&id)
+				adminIDs = append(adminIDs, id)
+			}
+		}
+		recipientIDs = append(recipientIDs, adminIDs...)
+
+		uniq := make(map[uint]struct{})
+		finalRecipients := make([]uint, 0, len(recipientIDs))
+		for _, id := range recipientIDs {
+			if _, ok := uniq[id]; !ok && id != 0 {
+				uniq[id] = struct{}{}
+				finalRecipients = append(finalRecipients, id)
+			}
+		}
+
+		title := "Penambahan Siswa ke Kelas"
+		body := fmt.Sprintf("Siswa %s telah ditambahkan ke kelas %s.", siswa.Nama, kelas.Nama)
+		payload := map[string]interface{}{
+			"type":       "assign_siswa_kelas",
+			"siswa_id":   siswa.ID,
+			"siswa_nama": siswa.Nama,
+			"kelas_id":   kelas.ID,
+			"kelas_nama": kelas.Nama,
+		}
+
+		if err := firebaseclient.NotifyUsers(context.Background(), "assign_siswa_kelas", title, body, payload, finalRecipients); err != nil {
+			log.Printf("NotifyUsers error (assign siswa kelas): %v", err)
+		}
+	}(siswa, kelas)
+
 	if err := database.DB.Preload("Kelas").Preload("MataPelajaran").First(&siswa, req.SiswaID).Error; err != nil {
 		utils.SuccessResponse(c, http.StatusCreated, "Siswa ditambahkan ke kelas (tapi gagal memuat relasi)", siswa)
 		return
@@ -112,6 +160,13 @@ func UnassignSiswaFromKelas(c *gin.Context) {
 		return
 	}
 
+	var kelas models.Kelas
+	if err := tx.First(&kelas, req.KelasID).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusNotFound, "Kelas tidak ditemukan")
+		return
+	}
+
 	var cnt int64
 	if err := tx.Table("kelas_siswas").
 		Where("siswa_id = ? AND kelas_id = ?", req.SiswaID, req.KelasID).
@@ -143,6 +198,50 @@ func UnassignSiswaFromKelas(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal commit transaksi: "+err.Error())
 		return
 	}
+
+	go func(siswa models.Siswa, kelas models.Kelas) {
+		var recipientIDs []uint
+		recipientIDs = append(recipientIDs, siswa.ID)
+
+		if kelas.WaliKelasID != nil && *kelas.WaliKelasID != 0 {
+			recipientIDs = append(recipientIDs, *kelas.WaliKelasID)
+		}
+
+		var adminIDs []uint
+		rowsAdmin, err := database.DB.Raw("SELECT id FROM admins").Rows()
+		if err == nil {
+			defer rowsAdmin.Close()
+			for rowsAdmin.Next() {
+				var id uint
+				_ = rowsAdmin.Scan(&id)
+				adminIDs = append(adminIDs, id)
+			}
+		}
+		recipientIDs = append(recipientIDs, adminIDs...)
+
+		uniq := make(map[uint]struct{})
+		finalRecipients := make([]uint, 0, len(recipientIDs))
+		for _, id := range recipientIDs {
+			if _, ok := uniq[id]; !ok && id != 0 {
+				uniq[id] = struct{}{}
+				finalRecipients = append(finalRecipients, id)
+			}
+		}
+
+		title := "Penghapusan Siswa dari Kelas"
+		body := fmt.Sprintf("Siswa %s telah dihapus dari kelas %s.", siswa.Nama, kelas.Nama)
+		payload := map[string]interface{}{
+			"type":       "unassign_siswa_kelas",
+			"siswa_id":   siswa.ID,
+			"siswa_nama": siswa.Nama,
+			"kelas_id":   kelas.ID,
+			"kelas_nama": kelas.Nama,
+		}
+
+		if err := firebaseclient.NotifyUsers(context.Background(), "unassign_siswa_kelas", title, body, payload, finalRecipients); err != nil {
+			log.Printf("NotifyUsers error (unassign siswa kelas): %v", err)
+		}
+	}(siswa, kelas)
 
 	if err := database.DB.Preload("Kelas").Preload("MataPelajaran").First(&siswa, req.SiswaID).Error; err != nil {
 		utils.SuccessResponse(c, http.StatusOK, "Siswa dihapus dari kelas (tapi gagal memuat relasi)", siswa)

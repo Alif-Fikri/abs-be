@@ -1,0 +1,14 @@
+List Notification | payload
+
+- Assign Guru ke Mapel | assign_guru_mapel
+- Delete Assign Guru Mapel | delete_guru_mapel
+- Assign Guru ke Wali Kelas | assign_wali_kelas
+- Unassign Wali Kelas | unassign_wali_kelas
+- Assign Siswa ke Mapel | assign_siswa_mapel
+- Unassign Siswa dari Mapel | unassign_siswa_mapel
+- Assign Siswa ke Kelas | assign_siswa_kelas
+- Unassign Siswa dari Kelas | unassign_siswa_kelas
+- Create Kelas | create_kelas
+- Delete Kelas | delete_kelas
+- Create Mapel | create_mapel
+- Delete Mapel | delete_mapel

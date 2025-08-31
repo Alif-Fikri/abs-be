@@ -130,4 +130,10 @@ func Api(r *gin.Engine) {
 		todo.PUT("/:id/status", tc.UpdateTodoStatus)
 		todo.DELETE("/:id", tc.DeleteTodo)
 	}
+
+	testnotif := api.Group("/user")
+	testnotif.Use(middlewares.AuthMiddleware(), middlewares.RoleMiddleware("admin", "guru", "wali_kelas", "siswa"))
+	{
+		testnotif.POST("/device-tokens", tc.RegisterDeviceToken)
+	}
 }
