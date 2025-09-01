@@ -13,6 +13,8 @@ import (
 	"abs-be/utils"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func AssignSiswaToKelas(c *gin.Context) {
@@ -29,6 +31,10 @@ func AssignSiswaToKelas(c *gin.Context) {
 	}
 
 	tx := database.DB.Begin()
+	if tx.Error != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memulai transaksi: "+tx.Error.Error())
+		return
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -36,16 +42,44 @@ func AssignSiswaToKelas(c *gin.Context) {
 	}()
 
 	var siswa models.Siswa
-	if err := tx.First(&siswa, req.SiswaID).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&siswa, req.SiswaID).Error; err != nil {
 		tx.Rollback()
-		utils.ErrorResponse(c, http.StatusNotFound, "Siswa tidak ditemukan")
+		if err == gorm.ErrRecordNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "Siswa tidak ditemukan")
+			return
+		}
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data siswa: "+err.Error())
 		return
 	}
 
 	var kelas models.Kelas
 	if err := tx.First(&kelas, req.KelasID).Error; err != nil {
 		tx.Rollback()
-		utils.ErrorResponse(c, http.StatusNotFound, "Kelas tidak ditemukan")
+		if err == gorm.ErrRecordNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "Kelas tidak ditemukan")
+			return
+		}
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data kelas: "+err.Error())
+		return
+	}
+
+	if siswa.KelasID != nil && *siswa.KelasID != 0 && *siswa.KelasID != req.KelasID {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusConflict, "Siswa sudah memiliki kelas utama lain; hapus/ubah dulu sebelum assign ke kelas berbeda")
+		return
+	}
+
+	var otherCnt int64
+	if err := tx.Table("kelas_siswas").
+		Where("siswa_id = ? AND kelas_id != ?", req.SiswaID, req.KelasID).
+		Count(&otherCnt).Error; err != nil {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal memeriksa pendaftaran kelas: "+err.Error())
+		return
+	}
+	if otherCnt > 0 {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusConflict, "Siswa sudah terdaftar di kelas lain; hapus relasi sebelumnya sebelum menambahkan ke kelas ini")
 		return
 	}
 
@@ -58,8 +92,20 @@ func AssignSiswaToKelas(c *gin.Context) {
 		return
 	}
 	if cnt > 0 {
-		tx.Rollback()
-		utils.ErrorResponse(c, http.StatusConflict, "Siswa sudah terdaftar di kelas ini")
+		if siswa.KelasID == nil || *siswa.KelasID != req.KelasID {
+			if err := tx.Model(&siswa).Update("kelas_id", req.KelasID).Error; err != nil {
+				tx.Rollback()
+				utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal update kelas utama siswa: "+err.Error())
+				return
+			}
+		}
+		if err := tx.Commit().Error; err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal commit transaksi: "+err.Error())
+			return
+		}
+
+		_ = database.DB.Preload("Kelas").Preload("MataPelajaran").First(&siswa, req.SiswaID)
+		utils.SuccessResponse(c, http.StatusOK, "Siswa sudah terdaftar di kelas ini", siswa)
 		return
 	}
 
@@ -76,17 +122,22 @@ func AssignSiswaToKelas(c *gin.Context) {
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal commit transaksi: "+err.Error())
 		return
 	}
 
-	go func(siswa models.Siswa, kelas models.Kelas) {
-		var recipientIDs []uint
-		recipientIDs = append(recipientIDs, siswa.ID)
+	go func(s models.Siswa, k models.Kelas) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in notif goroutine: %v", r)
+			}
+		}()
 
-		if kelas.WaliKelasID != nil && *kelas.WaliKelasID != 0 {
-			recipientIDs = append(recipientIDs, *kelas.WaliKelasID)
+		var recipientIDs []uint
+		recipientIDs = append(recipientIDs, s.ID)
+
+		if k.WaliKelasID != nil && *k.WaliKelasID != 0 {
+			recipientIDs = append(recipientIDs, *k.WaliKelasID)
 		}
 
 		var adminIDs []uint
@@ -111,13 +162,14 @@ func AssignSiswaToKelas(c *gin.Context) {
 		}
 
 		title := "Penambahan Siswa ke Kelas"
-		body := fmt.Sprintf("Siswa %s telah ditambahkan ke kelas %s.", siswa.Nama, kelas.Nama)
+		body := fmt.Sprintf("Siswa %s telah ditambahkan ke kelas %s.", s.Nama, k.Nama)
 		payload := map[string]interface{}{
 			"type":       "assign_siswa_kelas",
-			"siswa_id":   siswa.ID,
-			"siswa_nama": siswa.Nama,
-			"kelas_id":   kelas.ID,
-			"kelas_nama": kelas.Nama,
+			"siswa_id":   s.ID,
+			"siswa_nama": s.Nama,
+			"kelas_id":   k.ID,
+			"kelas_nama": k.Nama,
+			"actor":      "admin",
 		}
 
 		if err := firebaseclient.NotifyUsers(context.Background(), "assign_siswa_kelas", title, body, payload, finalRecipients); err != nil {
