@@ -1,13 +1,16 @@
 package controllers
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"abs-be/database"
+	"abs-be/firebaseclient"
 	"abs-be/models"
 	"abs-be/requests"
 	"abs-be/utils"
@@ -663,6 +666,30 @@ func ExportRecapAbsensiMapelCSV(c *gin.Context) {
 		return
 	}
 
+	userIDVal, ok := c.Get("user_id")
+	var requesterID uint
+	if ok {
+		switch v := userIDVal.(type) {
+		case uint:
+			requesterID = v
+		case int:
+			requesterID = uint(v)
+		case int64:
+			requesterID = uint(v)
+		case float64:
+			requesterID = uint(v)
+		default:
+			requesterID = 0
+		}
+	} else {
+		requesterID = 0
+	}
+
+	mid64, _ := strconv.ParseUint(mapelID, 10, 64)
+	kid64, _ := strconv.ParseUint(kelasID, 10, 64)
+	mid := uint(mid64)
+	kid := uint(kid64)
+
 	type row struct {
 		NamaSiswa   string    `json:"nama_siswa"`
 		Status      string    `json:"status"`
@@ -677,7 +704,7 @@ func ExportRecapAbsensiMapelCSV(c *gin.Context) {
 	var rows []row
 	db := database.DB
 
-	err := db.
+	if err := db.
 		Table("absensi_siswas").
 		Select(`siswas.nama AS nama_siswa,
                 absensi_siswas.status,
@@ -694,8 +721,7 @@ func ExportRecapAbsensiMapelCSV(c *gin.Context) {
 		Where("absensi_siswas.tipe_absensi = ? AND absensi_siswas.mapel_id = ? AND absensi_siswas.kelas_id = ? AND DATE(absensi_siswas.tanggal) = ?",
 			"mapel", mapelID, kelasID, tgl).
 		Order("siswas.nama ASC").
-		Scan(&rows).Error
-	if err != nil {
+		Scan(&rows).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal rekap absensi mapel: "+err.Error())
 		return
 	}
@@ -738,6 +764,26 @@ func ExportRecapAbsensiMapelCSV(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menyelesaikan CSV: "+err.Error())
 		return
 	}
+
+	if requesterID != 0 {
+		go func(reqID uint, mid, kid uint, tanggal, filename string, rowsCount int) {
+			title := "Export Rekap Mapel Selesai"
+			body := fmt.Sprintf("Rekap absensi mapel untuk tanggal %s telah selesai (%s).", tanggal, filename)
+			payload := map[string]interface{}{
+				"type":         "export_rekap_mapel",
+				"mapel_id":     fmt.Sprintf("%d", mid),
+				"kelas_id":     fmt.Sprintf("%d", kid),
+				"tanggal":      tanggal,
+				"filename":     filename,
+				"record_count": fmt.Sprintf("%d", rowsCount),
+			}
+			if err := firebaseclient.SendNotify(context.Background(), "export_rekap_mapel", title, body, payload, []uint{reqID}); err != nil {
+				log.Printf("ExportMapel: SendNotify error for user %d: %v", reqID, err)
+			}
+		}(requesterID, mid, kid, tgl, filename, len(rows))
+	} else {
+		log.Printf("ExportMapel: user_id not found in context, skipping personal notification")
+	}
 }
 
 func ExportRecapAbsensiKelasCSV(c *gin.Context) {
@@ -753,6 +799,28 @@ func ExportRecapAbsensiKelasCSV(c *gin.Context) {
 		return
 	}
 
+	userIDVal, ok := c.Get("user_id")
+	var requesterID uint
+	if ok {
+		switch v := userIDVal.(type) {
+		case uint:
+			requesterID = v
+		case int:
+			requesterID = uint(v)
+		case int64:
+			requesterID = uint(v)
+		case float64:
+			requesterID = uint(v)
+		default:
+			requesterID = 0
+		}
+	} else {
+		requesterID = 0
+	}
+
+	kid64, _ := strconv.ParseUint(kelasID, 10, 64)
+	kid := uint(kid64)
+
 	type row struct {
 		NamaSiswa   string    `json:"nama_siswa"`
 		Status      string    `json:"status"`
@@ -766,7 +834,7 @@ func ExportRecapAbsensiKelasCSV(c *gin.Context) {
 	var rows []row
 	db := database.DB
 
-	err := db.
+	if err := db.
 		Table("absensi_siswas").
 		Select(`siswas.nama AS nama_siswa,
                 absensi_siswas.status,
@@ -781,8 +849,7 @@ func ExportRecapAbsensiKelasCSV(c *gin.Context) {
 		Where("absensi_siswas.tipe_absensi = ? AND absensi_siswas.kelas_id = ? AND DATE(absensi_siswas.tanggal) = ?",
 			"kelas", kelasID, tgl).
 		Order("siswas.nama ASC").
-		Scan(&rows).Error
-	if err != nil {
+		Scan(&rows).Error; err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal rekap absensi kelas: "+err.Error())
 		return
 	}
@@ -823,6 +890,25 @@ func ExportRecapAbsensiKelasCSV(c *gin.Context) {
 	if err := w.Error(); err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menyelesaikan CSV: "+err.Error())
 		return
+	}
+
+	if requesterID != 0 {
+		go func(reqID uint, kid uint, tanggal, filename string, rowsCount int) {
+			title := "Export Rekap Kelas Selesai"
+			body := fmt.Sprintf("Rekap absensi kelas untuk tanggal %s telah selesai (%s).", tanggal, filename)
+			payload := map[string]interface{}{
+				"type":         "export_rekap_kelas",
+				"kelas_id":     fmt.Sprintf("%d", kid),
+				"tanggal":      tanggal,
+				"filename":     filename,
+				"record_count": fmt.Sprintf("%d", rowsCount),
+			}
+			if err := firebaseclient.SendNotify(context.Background(), "export_rekap_kelas", title, body, payload, []uint{reqID}); err != nil {
+				log.Printf("ExportKelas: SendNotify error for user %d: %v", reqID, err)
+			}
+		}(requesterID, kid, tgl, filename, len(rows))
+	} else {
+		log.Printf("ExportKelas: user_id not found in context, skipping personal notification")
 	}
 }
 

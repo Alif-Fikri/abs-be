@@ -136,4 +136,13 @@ func Api(r *gin.Engine) {
 	{
 		testnotif.POST("/device-tokens", tc.RegisterDeviceToken)
 	}
+
+	notif := api.Group("/notifications")
+	notif.Use(middlewares.AuthMiddleware())
+	{
+		notif.GET("/", tc.GetNotifications)
+		notif.PATCH("/:id/read", tc.MarkNotificationRead)
+		notif.PATCH("/mark-read", tc.MarkNotificationsRead)
+		notif.PATCH("/mark-all-read", tc.MarkAllRead)
+	}
 }

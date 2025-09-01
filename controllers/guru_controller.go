@@ -5,8 +5,12 @@ import (
 	"abs-be/models"
 	"abs-be/requests"
 	"abs-be/utils"
+	"abs-be/firebaseclient"
 	"net/http"
 	"strconv"
+	"context"
+	"fmt"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -70,13 +74,63 @@ func CreateGuru(c *gin.Context) {
 	}
 
 	if err := database.DB.Create(&newGuru).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat guru")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat guru: "+err.Error())
 		return
 	}
 
 	utils.SuccessResponse(c, http.StatusCreated, "Guru berhasil dibuat", gin.H{
 		"guru": newGuru,
 	})
+
+	go func(guru models.Guru) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic di notification goroutine CreateGuru: %v", r)
+			}
+		}()
+
+		var recipientIDs []uint
+
+		var adminIDs []uint
+		if rows, err := database.DB.Raw("SELECT id FROM admins").Rows(); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var id uint
+				_ = rows.Scan(&id)
+				adminIDs = append(adminIDs, id)
+			}
+		} else {
+			log.Printf("CreateGuru: gagal ambil admin ids: %v", err)
+		}
+		recipientIDs = append(recipientIDs, adminIDs...)
+
+		recipientIDs = append(recipientIDs, guru.ID)
+
+		uniq := map[uint]struct{}{}
+		finalRecipients := make([]uint, 0, len(recipientIDs))
+		for _, id := range recipientIDs {
+			if id == 0 {
+				continue
+			}
+			if _, ok := uniq[id]; !ok {
+				uniq[id] = struct{}{}
+				finalRecipients = append(finalRecipients, id)
+			}
+		}
+
+		title := "Akun Guru Baru Dibuat"
+		body := fmt.Sprintf("Akun guru %s (%s) berhasil dibuat.", guru.Nama, guru.Email)
+		payload := map[string]interface{}{
+			"type":    "create_guru",
+			"guru_id": fmt.Sprintf("%d", guru.ID),
+			"nama":    guru.Nama,
+			"email":   guru.Email,
+		}
+
+		if err := firebaseclient.SendNotify(context.Background(), "create_guru", title, body, payload, finalRecipients); err != nil {
+			log.Printf("CreateGuru: NotifyUsers failed: %v", err)
+		}
+	}(newGuru)
 }
 
 func UpdateGuru(c *gin.Context) {

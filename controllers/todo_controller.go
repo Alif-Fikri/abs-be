@@ -2,14 +2,19 @@ package controllers
 
 import (
 	"abs-be/database"
+	"abs-be/firebaseclient"
 	"abs-be/models"
 	"abs-be/requests"
 	"abs-be/utils"
+	"context"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func CreateTodo(c *gin.Context) {
@@ -38,12 +43,14 @@ func CreateTodo(c *gin.Context) {
 		userID = uint(v)
 	case int64:
 		userID = uint(v)
+	case float64:
+		userID = uint(v)
 	default:
 		utils.ErrorResponse(c, http.StatusInternalServerError, "user_id format tidak dikenali")
 		return
 	}
 
-	role := roleVal.(string)
+	role, _ := roleVal.(string)
 
 	tgl, err := time.Parse("2006-01-02", req.Tanggal)
 	if err != nil {
@@ -79,6 +86,46 @@ func CreateTodo(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusCreated, "Catatan berhasil dibuat", todo)
+
+	go func(t models.Todo, creatorID uint) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic di notification goroutine CreateTodo: %v", r)
+			}
+		}()
+
+		var recipientIDs []uint
+
+		// var adminIDs []uint
+		// if rows, err := database.DB.Raw("SELECT id FROM admins").Rows(); err == nil {
+		// 	defer rows.Close()
+		// 	for rows.Next() {
+		// 		var id uint
+		// 		_ = rows.Scan(&id)
+		// 		adminIDs = append(adminIDs, id)
+		// 	}
+		// } else {
+		// 	log.Printf("CreateTodo: gagal ambil admin ids: %v", err)
+		// }
+		// recipientIDs = append(recipientIDs, adminIDs...)
+
+		recipientIDs = append(recipientIDs, creatorID)
+
+		title := "To-Do Baru Dibuat"
+		body := fmt.Sprintf("To-Do: %s (tanggal %s)", t.Deskripsi, t.Tanggal.Format("2006-01-02"))
+		payload := map[string]interface{}{
+			"type":      "create_todo",
+			"todo_id":   fmt.Sprintf("%d", t.ID),
+			"role":      t.Role,
+			"tanggal":   t.Tanggal.Format("2006-01-02"),
+			"deskripsi": t.Deskripsi,
+			"jam":       t.JamDibuat,
+		}
+
+		if err := firebaseclient.SendNotify(context.Background(), "create_todo", title, body, payload, recipientIDs); err != nil {
+			log.Printf("CreateTodo: NotifyUsers failed: %v", err)
+		}
+	}(todo, userID)
 }
 
 func GetTodosByTanggal(c *gin.Context) {
@@ -241,6 +288,7 @@ func DeleteTodo(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "akses ditolak: role tidak ditemukan di context")
 		return
 	}
+
 	var userID uint
 	switch v := userIDVal.(type) {
 	case uint:
@@ -248,6 +296,8 @@ func DeleteTodo(c *gin.Context) {
 	case int:
 		userID = uint(v)
 	case int64:
+		userID = uint(v)
+	case float64:
 		userID = uint(v)
 	default:
 		utils.ErrorResponse(c, http.StatusInternalServerError, "user_id format tidak dikenali")
@@ -257,6 +307,16 @@ func DeleteTodo(c *gin.Context) {
 
 	db := database.DB
 	var delErr error
+
+	var todo models.Todo
+	if err := db.First(&todo, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "Catatan tidak ditemukan")
+			return
+		}
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal mengambil data catatan: "+err.Error())
+		return
+	}
 
 	switch role {
 	case "admin":
@@ -276,4 +336,58 @@ func DeleteTodo(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Catatan berhasil dihapus", nil)
+
+	go func(t models.Todo, deleterID uint) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic di notification goroutine DeleteTodo: %v", r)
+			}
+		}()
+
+		var recipientIDs []uint
+
+		// var adminIDs []uint
+		// if rows, err := database.DB.Raw("SELECT id FROM admins").Rows(); err == nil {
+		// 	defer rows.Close()
+		// 	for rows.Next() {
+		// 		var id uint
+		// 		_ = rows.Scan(&id)
+		// 		adminIDs = append(adminIDs, id)
+		// 	}
+		// } else {
+		// 	log.Printf("DeleteTodo: gagal ambil admin ids: %v", err)
+		// }
+		// recipientIDs = append(recipientIDs, adminIDs...)
+
+		switch t.Role {
+		case "admin":
+			if t.AdminID != nil {
+				recipientIDs = append(recipientIDs, *t.AdminID)
+			}
+		case "guru":
+			if t.GuruID != nil {
+				recipientIDs = append(recipientIDs, *t.GuruID)
+			}
+		case "wali_kelas":
+			if t.WaliKelasID != nil {
+				recipientIDs = append(recipientIDs, *t.WaliKelasID)
+			}
+		}
+
+		recipientIDs = append(recipientIDs, deleterID)
+
+		title := "To-Do Dihapus"
+		body := fmt.Sprintf("To-Do: %s (tanggal %s) telah dihapus.", t.Deskripsi, t.Tanggal.Format("2006-01-02"))
+		payload := map[string]interface{}{
+			"type":      "delete_todo",
+			"todo_id":   fmt.Sprintf("%d", t.ID),
+			"role":      t.Role,
+			"deskripsi": t.Deskripsi,
+			"tanggal":   t.Tanggal.Format("2006-01-02"),
+		}
+
+		if err := firebaseclient.SendNotify(context.Background(), "delete_todo", title, body, payload, recipientIDs); err != nil {
+			log.Printf("DeleteTodo: NotifyUsers failed: %v", err)
+		}
+	}(todo, userID)
 }

@@ -12,3 +12,9 @@ List Notification | payload
 - Delete Kelas | delete_kelas
 - Create Mapel | create_mapel
 - Delete Mapel | delete_mapel
+- Create Todo | create_todo
+- Delete Todo | delete_todo
+- Create Siswa | create_siswa
+- Create Guru | create_guru
+- Rekap Absensi Mapel ke CSV | export_rekap_mapel
+- Rekap Absensi Kelas ke CSV | export_rekap_kelas

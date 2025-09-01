@@ -107,3 +107,14 @@ type AbsensiResponse struct {
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
+
+type NotificationItemResponse struct {
+	ID        uint                   `json:"id"`
+	Title     string                 `json:"title"`
+	Body      string                 `json:"body"`
+	Type      string                 `json:"type"`
+	Payload   map[string]interface{} `json:"payload,omitempty"`
+	Read      bool                   `json:"read"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}

@@ -5,9 +5,13 @@ import (
 	"abs-be/models"
 	"abs-be/requests"
 	"abs-be/utils"
+	"abs-be/firebaseclient"
 	"net/http"
 	"strconv"
 	"time"
+	"context"
+	"fmt"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,14 +59,75 @@ func CreateSiswa(c *gin.Context) {
 		Password:     hashedPassword,
 	}
 
+	// if req.KelasID != 0 { newSiswa.KelasID = req.KelasID }
+
 	if err := database.DB.Create(&newSiswa).Error; err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat siswa")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal membuat siswa: "+err.Error())
 		return
 	}
 
 	utils.SuccessResponse(c, http.StatusCreated, "Siswa berhasil dibuat", gin.H{
 		"siswa": newSiswa,
 	})
+
+	go func(siswa models.Siswa) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic di notification goroutine CreateSiswa: %v", r)
+			}
+		}()
+
+		var recipientIDs []uint
+
+		var adminIDs []uint
+		if rows, err := database.DB.Raw("SELECT id FROM admins").Rows(); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var id uint
+				_ = rows.Scan(&id)
+				adminIDs = append(adminIDs, id)
+			}
+		} else {
+			log.Printf("CreateSiswa: gagal ambil admin ids: %v", err)
+		}
+		recipientIDs = append(recipientIDs, adminIDs...)
+
+		if siswa.KelasID != nil && *siswa.KelasID != 0 {
+			var kelas models.Kelas
+			if err := database.DB.Preload("WaliKelas").First(&kelas, *siswa.KelasID).Error; err == nil {
+				if kelas.WaliKelasID != nil && *kelas.WaliKelasID != 0 {
+					recipientIDs = append(recipientIDs, *kelas.WaliKelasID)
+				}
+			}
+		}
+
+		recipientIDs = append(recipientIDs, siswa.ID)
+
+		uniq := map[uint]struct{}{}
+		finalRecipients := make([]uint, 0, len(recipientIDs))
+		for _, id := range recipientIDs {
+			if id == 0 {
+				continue
+			}
+			if _, ok := uniq[id]; !ok {
+				uniq[id] = struct{}{}
+				finalRecipients = append(finalRecipients, id)
+			}
+		}
+
+		title := "Akun Siswa Baru Dibuat"
+		body := fmt.Sprintf("Akun siswa %s (%s) berhasil dibuat.", siswa.Nama, siswa.NISN)
+		payload := map[string]interface{}{
+			"type":     "create_siswa",
+			"siswa_id": fmt.Sprintf("%d", siswa.ID),
+			"nama":     siswa.Nama,
+			"nisn":     siswa.NISN,
+		}
+
+		if err := firebaseclient.SendNotify(context.Background(), "create_siswa", title, body, payload, finalRecipients); err != nil {
+			log.Printf("CreateSiswa: NotifyUsers failed: %v", err)
+		}
+	}(newSiswa)
 }
 
 func GetSiswaByKelas(c *gin.Context) {
