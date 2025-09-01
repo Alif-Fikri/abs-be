@@ -215,3 +215,122 @@ func MarkAllRead(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, "Semua notifikasi berhasil ditandai terbaca", nil)
 }
+
+func DeleteNotification(c *gin.Context) {
+	idParam := c.Param("id")
+	id64, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ID notifikasi tidak valid")
+		return
+	}
+	id := uint(id64)
+
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "akses ditolak: user tidak ditemukan di context")
+		return
+	}
+	var userID uint
+	switch v := userIDVal.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	default:
+		utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
+		return
+	}
+
+	var notif models.Notification
+	if err := database.DB.First(&notif, id).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Notifikasi tidak ditemukan")
+		return
+	}
+
+	if notif.Recipient != userID {
+		utils.ErrorResponse(c, http.StatusForbidden, "Tidak memiliki izin untuk menghapus notifikasi ini")
+		return
+	}
+
+	if err := database.DB.Delete(&notif).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus notifikasi: "+err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Notifikasi berhasil dihapus", nil)
+}
+
+func DeleteNotificationsBulk(c *gin.Context) {
+	var body struct {
+		IDs []uint `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Data tidak valid: "+err.Error())
+		return
+	}
+	if len(body.IDs) == 0 {
+		utils.ErrorResponse(c, http.StatusBadRequest, "ids wajib diisi")
+		return
+	}
+
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "akses ditolak: user tidak ditemukan di context")
+		return
+	}
+	var userID uint
+	switch v := userIDVal.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	default:
+		utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
+		return
+	}
+
+	res := database.DB.Where("id IN ? AND recipient = ?", body.IDs, userID).Delete(&models.Notification{})
+	if res.Error != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus notifikasi: "+res.Error.Error())
+		return
+	}
+
+	if res.RowsAffected == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "Notifikasi tidak ditemukan atau bukan milik user ini")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Notifikasi berhasil dihapus", gin.H{"deleted": res.RowsAffected})
+}
+
+func DeleteAllNotifications(c *gin.Context) {
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "akses ditolak: user tidak ditemukan di context")
+		return
+	}
+	var userID uint
+	switch v := userIDVal.(type) {
+	case uint:
+		userID = v
+	case int:
+		userID = uint(v)
+	case int64:
+		userID = uint(v)
+	default:
+		utils.ErrorResponse(c, http.StatusInternalServerError, "format user_id tidak dikenali")
+		return
+	}
+
+	res := database.DB.Where("recipient = ?", userID).Delete(&models.Notification{})
+	if res.Error != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Gagal menghapus notifikasi: "+res.Error.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Semua notifikasi berhasil dihapus", gin.H{"deleted": res.RowsAffected})
+}

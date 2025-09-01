@@ -87,29 +87,14 @@ func CreateTodo(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusCreated, "Catatan berhasil dibuat", todo)
 
-	go func(t models.Todo, creatorID uint) {
+	go func(t models.Todo, actorID uint) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("panic di notification goroutine CreateTodo: %v", r)
 			}
 		}()
 
-		var recipientIDs []uint
-
-		// var adminIDs []uint
-		// if rows, err := database.DB.Raw("SELECT id FROM admins").Rows(); err == nil {
-		// 	defer rows.Close()
-		// 	for rows.Next() {
-		// 		var id uint
-		// 		_ = rows.Scan(&id)
-		// 		adminIDs = append(adminIDs, id)
-		// 	}
-		// } else {
-		// 	log.Printf("CreateTodo: gagal ambil admin ids: %v", err)
-		// }
-		// recipientIDs = append(recipientIDs, adminIDs...)
-
-		recipientIDs = append(recipientIDs, creatorID)
+		recipientIDs := []uint{actorID}
 
 		title := "To-Do Baru Dibuat"
 		body := fmt.Sprintf("To-Do: %s (tanggal %s)", t.Deskripsi, t.Tanggal.Format("2006-01-02"))
@@ -120,10 +105,11 @@ func CreateTodo(c *gin.Context) {
 			"tanggal":   t.Tanggal.Format("2006-01-02"),
 			"deskripsi": t.Deskripsi,
 			"jam":       t.JamDibuat,
+			"actor_id":  fmt.Sprintf("%d", actorID),
 		}
 
 		if err := firebaseclient.SendNotify(context.Background(), "create_todo", title, body, payload, recipientIDs); err != nil {
-			log.Printf("CreateTodo: NotifyUsers failed: %v", err)
+			log.Printf("CreateTodo: SendNotify failed: %v", err)
 		}
 	}(todo, userID)
 }
@@ -306,7 +292,6 @@ func DeleteTodo(c *gin.Context) {
 	role := roleVal.(string)
 
 	db := database.DB
-	var delErr error
 
 	var todo models.Todo
 	if err := db.First(&todo, id).Error; err != nil {
@@ -318,6 +303,7 @@ func DeleteTodo(c *gin.Context) {
 		return
 	}
 
+	var delErr error
 	switch role {
 	case "admin":
 		delErr = db.Where("id = ? AND admin_id = ?", id, userID).Delete(&models.Todo{}).Error
@@ -337,44 +323,14 @@ func DeleteTodo(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, "Catatan berhasil dihapus", nil)
 
-	go func(t models.Todo, deleterID uint) {
+	go func(t models.Todo, actorID uint) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("panic di notification goroutine DeleteTodo: %v", r)
 			}
 		}()
 
-		var recipientIDs []uint
-
-		// var adminIDs []uint
-		// if rows, err := database.DB.Raw("SELECT id FROM admins").Rows(); err == nil {
-		// 	defer rows.Close()
-		// 	for rows.Next() {
-		// 		var id uint
-		// 		_ = rows.Scan(&id)
-		// 		adminIDs = append(adminIDs, id)
-		// 	}
-		// } else {
-		// 	log.Printf("DeleteTodo: gagal ambil admin ids: %v", err)
-		// }
-		// recipientIDs = append(recipientIDs, adminIDs...)
-
-		switch t.Role {
-		case "admin":
-			if t.AdminID != nil {
-				recipientIDs = append(recipientIDs, *t.AdminID)
-			}
-		case "guru":
-			if t.GuruID != nil {
-				recipientIDs = append(recipientIDs, *t.GuruID)
-			}
-		case "wali_kelas":
-			if t.WaliKelasID != nil {
-				recipientIDs = append(recipientIDs, *t.WaliKelasID)
-			}
-		}
-
-		recipientIDs = append(recipientIDs, deleterID)
+		recipientIDs := []uint{actorID}
 
 		title := "To-Do Dihapus"
 		body := fmt.Sprintf("To-Do: %s (tanggal %s) telah dihapus.", t.Deskripsi, t.Tanggal.Format("2006-01-02"))
@@ -384,10 +340,11 @@ func DeleteTodo(c *gin.Context) {
 			"role":      t.Role,
 			"deskripsi": t.Deskripsi,
 			"tanggal":   t.Tanggal.Format("2006-01-02"),
+			"actor_id":  fmt.Sprintf("%d", actorID),
 		}
 
 		if err := firebaseclient.SendNotify(context.Background(), "delete_todo", title, body, payload, recipientIDs); err != nil {
-			log.Printf("DeleteTodo: NotifyUsers failed: %v", err)
+			log.Printf("DeleteTodo: SendNotify failed: %v", err)
 		}
 	}(todo, userID)
 }

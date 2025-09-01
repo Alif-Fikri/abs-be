@@ -144,5 +144,8 @@ func Api(r *gin.Engine) {
 		notif.PATCH("/:id/read", tc.MarkNotificationRead)
 		notif.PATCH("/mark-read", tc.MarkNotificationsRead)
 		notif.PATCH("/mark-all-read", tc.MarkAllRead)
+		notif.DELETE("/:id", tc.DeleteNotification) 
+		notif.DELETE("/", tc.DeleteNotificationsBulk)
+		notif.DELETE("/all", tc.DeleteAllNotifications)
 	}
 }
